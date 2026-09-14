@@ -1331,15 +1331,23 @@ select.pill option{background:#121613;color:var(--text)}
 .tl-body time{display:block;color:var(--muted);font-size:11.5px;margin-top:2px}
 
 /* Notifications */
-#toasts{position:fixed;bottom:20px;right:20px;z-index:90;display:flex;flex-direction:column;gap:9px}
+#toasts{position:fixed;bottom:20px;right:20px;z-index:90;display:flex;flex-direction:column;gap:10px;width:min(360px,calc(100vw - 40px))}
 .toast{
-  background:var(--surface-3);border:1px solid var(--line);color:var(--text);
-  padding:11px 15px;border-radius:var(--r-sm);font-size:13.5px;
-  box-shadow:var(--sh);animation:slide .2s cubic-bezier(.2,.8,.3,1);max-width:330px;
+  display:grid;grid-template-columns:32px minmax(0,1fr) 28px;align-items:start;gap:10px;
+  background:color-mix(in srgb,var(--surface-3) 92%,transparent);border:1px solid var(--line);color:var(--text);
+  padding:13px;border-radius:12px;font-size:13.5px;backdrop-filter:blur(16px);
+  box-shadow:0 18px 50px rgba(0,0,0,.28);animation:slide .32s cubic-bezier(.2,.8,.3,1);max-width:none;
 }
-.toast.ok{border-left:2px solid var(--accent)}
-.toast.err{border-left:2px solid var(--red)}
-@keyframes slide{from{transform:translateX(14px);opacity:0}}
+.toast.ok{--toast-accent:var(--accent)}
+.toast.err{--toast-accent:var(--red)}
+.toast-icon{width:30px;height:30px;display:grid;place-items:center;border-radius:9px;background:color-mix(in srgb,var(--toast-accent) 14%,transparent);color:var(--toast-accent);font-weight:800}
+.toast-copy{display:flex;flex-direction:column;gap:2px;min-width:0}
+.toast-title{font-size:12px;font-weight:750;letter-spacing:.02em;color:var(--toast-accent)}
+.toast-message{color:var(--text);line-height:1.42;overflow-wrap:anywhere}
+.toast-close{width:28px;height:28px;display:grid;place-items:center;border-radius:8px;color:var(--muted);font-size:18px;line-height:1;transition:background .2s,color .2s}
+.toast-close:hover{background:var(--surface-2);color:var(--text)}
+.toast.leaving{opacity:0;transform:translateX(16px);transition:opacity .25s ease,transform .25s ease}
+@keyframes slide{from{transform:translateX(18px) scale(.97);opacity:0}}
 
 .bar{height:5px;border-radius:99px;background:var(--surface-3);overflow:hidden}
 .bar i{display:block;height:100%;background:var(--accent);border-radius:99px}
@@ -3088,10 +3096,17 @@ const isAdmin = () => !state.viewAs && realAdmin();
 
 function toast(text, kind="ok"){
   const t = document.createElement("div");
-  t.className = "toast " + kind; t.textContent = text;
+  const isError = kind === "err";
+  t.className = "toast " + kind;
+  t.setAttribute("role", isError ? "alert" : "status");
+  t.innerHTML = `<span class="toast-icon" aria-hidden="true">${isError ? "!" : "✓"}</span>
+    <span class="toast-copy"><strong class="toast-title">${isError ? "Action requise" : "Mise à jour effectuée"}</strong><span class="toast-message"></span></span>
+    <button class="toast-close" type="button" aria-label="Masquer la notification">×</button>`;
+  t.querySelector(".toast-message").textContent = text;
   $("#toasts").append(t);
-  setTimeout(()=>{ t.style.opacity="0"; t.style.transition="opacity .25s";
-    setTimeout(()=>t.remove(),250); }, 3200);
+  const dismiss = () => { if (!t.isConnected) return; t.classList.add("leaving"); setTimeout(()=>t.remove(),250); };
+  t.querySelector(".toast-close").onclick = dismiss;
+  setTimeout(dismiss, 4500);
 }
 
 function modal({ title, body, footer, wide }){
