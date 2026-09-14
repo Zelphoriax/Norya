@@ -1,0 +1,46 @@
+# Environment files and local overrides
+.env
+.env.*
+!.env.example
+!.env.sample
+*.local
+*.local.json
+
+# Credentials, private keys, tokens, and session data
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+credentials.json
+credentials.*.json
+secrets.json
+secrets.*.json
+*.session
+*.session.json
+cookies.json
+sessions/
+.sessions/
+
+# Local agent/tool state (may contain credentials or session metadata)
+.claude/
+.codex/
+.agents/
+
+# Private business data and local backups
+prospects_norya.csv
+*.bak
+
+# Generated output, caches, editor and OS files
+node_modules/
+dist/
+build/
+out/
+coverage/
+*.log
+.cache/
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
