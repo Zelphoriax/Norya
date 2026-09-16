@@ -1,0 +1,15 @@
+{
+  "//": "supabase-js tire des dépendances npm (realtime-js). Sans nodeModulesDir en auto, deno check et deno test ne les résolvent pas hors du runtime Supabase.",
+  "nodeModulesDir": "auto",
+  "imports": {
+    "stripe": "npm:stripe@17.7.0",
+    "@supabase/supabase-js": "jsr:@supabase/supabase-js@2",
+    "@std/assert": "jsr:@std/assert@1"
+  },
+  "tasks": {
+    "test": "deno test --allow-all"
+  },
+  "fmt": {
+    "lineWidth": 100
+  }
+}
