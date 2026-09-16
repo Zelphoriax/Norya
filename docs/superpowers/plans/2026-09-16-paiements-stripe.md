@@ -2206,27 +2206,43 @@ en deux temps : résolution de la fiche côté serveur avec repli sur le
 client Stripe, et une facture non rattachable lève désormais au lieu de
 se taire.
 
-### Ce qui reste, et pourquoi
+### Ce qui reste, et pourquoi — état au 16/09/2026
 
-**Étapes 4 et 5 — SEPA.** Demandent un paiement par prélèvement, donc un
-IBAN saisi dans le formulaire Stripe. Les IBAN de test sont
-`FR1420041010050500013M02606` (se compense) et `…M02607` (échoue).
+Aucun des points restants n'est exécutable par un agent. Ce n'est pas une
+limite d'outillage mais de nature : chacun exige soit la saisie d'une
+coordonnée bancaire, soit une vérification d'identité, soit la bascule en
+production que le propriétaire a explicitement exclue.
 
-**Étape 6 — seconde moitié.** La mise en file est vérifiée ; le passage
-automatique à `verse` quand le commercial termine sa vérification ne l'est
-pas, faute d'un `account.updated` réel.
+| Point | Ce qui manque |
+|---|---|
+| Étapes 4 et 5 — SEPA | un IBAN saisi dans le formulaire Stripe. Test : `FR1420041010050500013M02606` se compense, `…M02607` échoue |
+| Étape 6, seconde moitié | la vérification d'identité du commercial, qui déclenche `account.updated` puis le rejeu de la file |
+| Étape 8 — ancre | l'inspection de l'abonnement Stripe : le CLI et la clé secrète ne sont pas sur le même compte. Couverte par huit tests unitaires, changements d'heure compris |
+| Étape 9 — mention 293 B | un accès authentifié au tableau de bord Stripe |
+| Tâche 16 — production | exclue par consigne : `DEMO` reste à `true` et Stripe en mode test |
 
-**Étape 8 — ancre.** `ancreFacturation` est couverte par huit tests
-unitaires, changements d'heure compris, mais l'objet Stripe correspondant
-n'est pas inspectable : le CLI et la clé secrète ne sont pas sur le même
-compte.
+### Nettoyage effectué
 
-**Jeu d'essai conservé** pour ces vérifications : fiche « ESSAI-PAIEMENT »,
-commercial `essai-paiement@norya.invalid`, compte lié `acct_1UGBYyV05KrGGmso`.
-À supprimer ensuite. Un abonnement de test orphelin subsiste côté Stripe
-(`sub_1UGBh2…`, dont la fiche a été supprimée) : à annuler, sinon sa première
-échéance produira des livraisons en échec — ce qui est le comportement voulu,
-mais du bruit inutile.
+Le jeu d'essai est supprimé : plus aucun prospect, encaissement, commission ni
+compte de test en base. Seul le profil réel `zel.zx35@gmail.com` subsiste.
+
+Les trois lignes de `stripe_events` sont **conservées volontairement** : elles
+empêchent le retraitement d'événements de test dont la fiche n'existe plus, qui
+lèverait désormais — comportement voulu, mais bruit inutile.
+
+Restent à annuler côté Stripe, en mode test, faute d'accès à ce compte :
+
+```
+sub_1UGBh2V05KpDxKCv…        abonnement du premier essai
+sub_1UGC4GV05KpDxKCv5wnO18SA  abonnement du second essai
+acct_1UGBYyV05KrGGmso         compte Connect du commercial d'essai
+acct_1UGBTUV05KnvYq7a         compte Connect créé pendant un diagnostic
+acct_1UGBXLV05KJO63rW         idem
+cus_VGidOcMwlZ2JXd            client d'un diagnostic interrompu
+```
+
+Pour refaire un jeu d'essai en une commande :
+`node scratchpad/fixture.mjs`
 
 - [x] **Step 1: Poser les secrets**
 
