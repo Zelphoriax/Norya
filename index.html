@@ -4466,9 +4466,13 @@ async function refresh(){
   if (isAdmin()){
     try { state.sessions = await store.sessions(); } catch { state.sessions = []; }
     try { state.applications = await store.applications(); } catch { state.applications = []; }
+    try { state.ca = await store.caAnnuel(); } catch { state.ca = null; }
+    try { state.transferts = await store.transferts(); } catch { state.transferts = []; }
   } else {
     state.sessions = [];
     state.applications = [];
+    state.ca = null;
+    state.transferts = [];
   }
 }
 
@@ -5840,6 +5844,69 @@ function popover(anchor, items, onPick){
 /* ---------- Vue : Administrateur ----------
    Réservée à l'admin. Le serveur applique la même règle : un commercial
    ne peut lire que ses propres sessions. */
+/* CA encaissé de l'année face au seuil de franchise de TVA.
+   En micro-entreprise le CA déclaré est l'encaissement brut : les 800 €
+   comptent entièrement, commission comprise. L'alerte se déclenche à 80 %,
+   assez tôt pour arbitrer plutôt que pour constater. */
+function carteCA(ca){
+  if (!ca) return "";
+  const pct    = Math.min(100, Math.round(ca.ca_cents / ca.seuil_franchise_cents * 100));
+  const alerte = ca.ca_cents >= ca.seuil_franchise_cents * 0.8;
+  const reste  = Math.max(0, ca.seuil_franchise_cents - ca.ca_cents);
+  return `
+  <div class="card">
+    <div class="card-head"><h3>Chiffre d'affaires ${ca.annee}</h3></div>
+    <div style="padding:0 16px 16px">
+      <div class="num" style="font-size:26px">${eur(ca.ca_cents / 100)}</div>
+      <div style="height:6px;background:var(--surface-3);border-radius:var(--r-sm);overflow:hidden;margin:10px 0 6px">
+        <div style="height:100%;width:${pct}%;background:${alerte ? "var(--amber)" : "var(--accent)"}"></div>
+      </div>
+      <small style="color:var(--muted)">
+        ${pct} % du seuil de franchise de TVA (${eur(ca.seuil_franchise_cents / 100)})${reste
+          ? ` · il reste ${eur(reste / 100)}` : " · seuil atteint"}</small>
+      ${alerte ? `<div class="alert" style="margin-top:10px">
+        Au-delà de ${eur(ca.seuil_tolerance_cents / 100)}, la TVA s'applique à la date
+        du dépassement, et non l'année suivante. Anticipez la bascule.</div>` : ""}
+      ${ca.regle_confirmee ? "" : `<small style="display:block;margin-top:10px;color:var(--muted)">
+        Calcul sur le ${ca.ca_base === "brut_encaisse" ? "brut encaissé" : "net après commission"} —
+        règle fiscale non encore confirmée auprès d'un comptable.</small>`}
+    </div>
+  </div>`;
+}
+
+/* Journal des commissions versées. « En attente » n'est pas une panne :
+   c'est le temps que met Stripe à vérifier un compte. */
+function tableTransferts(lignes){
+  if (!lignes || !lignes.length) return `
+  <div class="card">
+    <div class="card-head"><h3>Commissions versées</h3></div>
+    <div class="empty"><h4>Aucune commission versée</h4>
+      <p>Les versements apparaîtront ici dès la première vente encaissée.</p></div>
+  </div>`;
+  const etat = {
+    verse: "Versée",
+    en_attente_onboarding: "En attente de vérification",
+    echec: "Échec"
+  };
+  const pastille = s => s === "verse" ? "conclu" : s === "echec" ? "refuse" : "attente";
+  return `
+  <div class="card">
+    <div class="card-head"><h3>Commissions versées</h3>
+      <span class="tag">${lignes.length} mouvement${lignes.length>1?"s":""}</span></div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Commercial</th><th>Montant</th><th>État</th><th class="opt-md">Date</th></tr></thead>
+      <tbody>${lignes.map(l => `
+        <tr>
+          <td><b>${esc(l.profiles?.full_name || "—")}</b></td>
+          <td class="num">${eur(l.amount_cents / 100)}</td>
+          <td><span class="pill ${pastille(l.status)}">${etat[l.status] || esc(l.status)}</span></td>
+          <td class="opt-md">${dateFR(l.created_at)}</td>
+        </tr>`).join("")}
+      </tbody>
+    </table></div>
+  </div>`;
+}
+
 function viewAdmin(){
   if (!isAdmin()) return `<div class="page-head"><h2>Administrateur</h2></div>
     <div class="card"><div class="empty"><h4>Accès réservé</h4>
@@ -5872,6 +5939,9 @@ function viewAdmin(){
       ? `<button class="ihb ihb-ghost" data-go="inscriptions"><span class="ihb-label">${(state.applications||[]).filter(c => c.status === "en_attente").length} dossier${(state.applications||[]).filter(c => c.status === "en_attente").length>1?"s":""} à traiter</span><span class="ihb-fly"><span>Voir les inscriptions</span><svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span><span class="ihb-dot" aria-hidden="true"></span></button>`
       : ""}
     <button class="ihb ihb-ghost" id="expActivity"><span class="ihb-label">Exporter l'activité</span><span class="ihb-fly"><span>Exporter l'activité</span><svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span><span class="ihb-dot" aria-hidden="true"></span></button></div>
+
+  ${carteCA(state.ca)}
+  ${tableTransferts(state.transferts)}
 
   <div class="card">
     <div class="stats">
