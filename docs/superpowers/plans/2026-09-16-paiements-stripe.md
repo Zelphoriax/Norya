@@ -1193,7 +1193,7 @@ git commit -m "feat(functions): add tested webhook decision logic"
 - Consumes: `effetsPour`, `Effet` (Task 7) ; `stripe`, `db` (Task 4) ; tables de la Task 2.
 - Produces: `POST /functions/v1/stripe-webhook`, sans JWT, signature obligatoire.
 
-- [ ] **Step 1: Désactiver la vérification JWT sur ce seul point d'entrée**
+- [x] **Step 1: Désactiver la vérification JWT sur ce seul point d'entrée**
 
 Dans `supabase/config.toml` :
 
@@ -1204,7 +1204,7 @@ verify_jwt = false
 
 Stripe n'a pas de JWT Supabase. C'est la signature qui authentifie, pas le jeton.
 
-- [ ] **Step 2: Écrire la fonction**
+- [x] **Step 2: Écrire la fonction**
 
 ```ts
 import { stripe } from "../_shared/stripe.ts";
@@ -1346,7 +1346,7 @@ async function appliquer(sb: ReturnType<typeof db>, e: Effet): Promise<void> {
 }
 ```
 
-- [ ] **Step 3: Vérifier le typage**
+- [x] **Step 3: Vérifier le typage**
 
 ```bash
 deno check supabase/functions/stripe-webhook/index.ts
@@ -1354,7 +1354,7 @@ deno check supabase/functions/stripe-webhook/index.ts
 
 Expected: aucune erreur.
 
-- [ ] **Step 4: Vérifier qu'une requête non signée est rejetée**
+- [x] **Step 4: Vérifier qu'une requête non signée est rejetée**
 
 ```bash
 supabase functions serve stripe-webhook --no-verify-jwt &
@@ -1365,7 +1365,7 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST \
 Expected: `400`. Un webhook qui accepterait ce corps laisserait n'importe
 qui déclencher un virement de 320 €.
 
-- [ ] **Step 5: Vérifier l'idempotence sur un rejeu réel**
+- [x] **Step 5: Vérifier l'idempotence sur un rejeu réel**
 
 ```bash
 stripe listen --forward-to http://localhost:54321/functions/v1/stripe-webhook &
@@ -1377,7 +1377,7 @@ psql "$DB_URL" -c "select count(*) from commission_transfers;"
 
 Expected: `1`. Pas `2`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add supabase/functions/stripe-webhook/index.ts supabase/config.toml
