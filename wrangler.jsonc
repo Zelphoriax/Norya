@@ -1,0 +1,10 @@
+{
+  // Norya est un unique fichier statique. On ne publie que dist/, jamais la
+  // racine du dépôt : prospects_norya.csv et la sauvegarde .bak sont des
+  // données privées qui ne doivent jamais partir en ligne.
+  "name": "norya",
+  "compatibility_date": "2026-09-15",
+  "assets": {
+    "directory": "./dist"
+  }
+}
