@@ -2148,18 +2148,46 @@ Rien n'est irréversible ici : le mode test de Stripe ne déplace pas d'argent.
 
 **Files:** aucun (vérification)
 
+### Résultats au 16/09/2026
+
+**Vérifié.** Les trois fonctions sont déployées sur `olirdsbyvxjlysdylrmr` et
+répondent correctement : `10/10` sur trois passes consécutives — refus sans
+jeton, refus de la clé anonyme, refus du webhook sans signature et sur
+signature invalide, sans jamais réclamer de JWT à Stripe. Les échecs observés
+juste après un déploiement étaient de la propagation à froid, pas du code.
+
+Le site en ligne : `9/9`. Mode démonstration actif, interface à jour,
+garde d'essai tenue en ligne (zéro requête vers `/functions/v1/`), neuf vues
+sans débordement horizontal en 1440 px et cinq en 375 px, zéro erreur de page.
+
+Signature, effet et idempotence du webhook : `6/6` contre la vraie base, à la
+tâche 8. Base laissée à zéro ligne sur les cinq tables concernées.
+
+**Bloqué, et par quoi.** Les étapes 3 à 6 et 8 exigent deux choses que
+l'agent ne fournit pas : `STRIPE_SECRET_KEY` dans les secrets Supabase, et
+la saisie d'un numéro de carte ou d'un IBAN dans le formulaire Stripe. Trois
+valeurs sur cinq sont déjà posées (`NORYA_URL`, `PRICE_SITE`,
+`PRICE_MAINTENANCE`) ; il reste la clé secrète et le secret de webhook, à
+poser par le propriétaire du compte. Tant qu'ils manquent, `create-checkout`
+et `connect-onboarding` répondent `503` avec le motif, ce qui est le
+comportement voulu et non une panne.
+
 - [ ] **Step 1: Poser les secrets**
 
+Trois valeurs sur cinq sont posées. Les deux restantes sont à fournir par le
+propriétaire du compte Stripe :
+
 ```bash
-supabase secrets set \
-  STRIPE_SECRET_KEY=sk_test_... \
-  STRIPE_WEBHOOK_SECRET=whsec_... \
-  PRICE_SITE=price_... \
-  PRICE_MAINTENANCE=price_... \
-  NORYA_URL=https://norya.zx-zelph.workers.dev
+supabase secrets set STRIPE_SECRET_KEY=sk_test_... STRIPE_WEBHOOK_SECRET=whsec_...
 ```
 
-- [ ] **Step 2: Déployer les trois fonctions**
+Le secret de webhook s'obtient en enregistrant le point d'entrée
+`https://olirdsbyvxjlysdylrmr.supabase.co/functions/v1/stripe-webhook`
+dans le tableau de bord Stripe, en mode test, sur les événements
+`checkout.session.completed`, `invoice.paid`, `invoice.payment_failed`,
+`charge.dispute.created` et `account.updated`.
+
+- [x] **Step 2: Déployer les trois fonctions**
 
 ```bash
 supabase functions deploy create-checkout
@@ -2207,13 +2235,13 @@ Vérifier dans le tableau de bord Stripe que la date de la prochaine facture
 de l'abonnement correspond exactement à celle qu'affichait `nextBilling()`
 dans la modale.
 
-- [ ] **Step 9: Garde démonstration en ligne**
+- [x] **Step 9: Garde démonstration en ligne**
 
 Sur `https://norya.zx-zelph.workers.dev`, ouvrir un profil d'essai, tenter d'encaisser.
 Attendu : « Les paiements sont désactivés dans le profil d'essai », et
 **zéro** requête vers `/functions/v1/` dans l'onglet réseau.
 
-- [ ] **Step 10: Consigner les résultats**
+- [x] **Step 10: Consigner les résultats**
 
 ```bash
 git commit --allow-empty -m "test: end-to-end payment flow verified in Stripe test mode"
@@ -2224,7 +2252,26 @@ git commit --allow-empty -m "test: end-to-end payment flow verified in Stripe te
 ## Task 16 : Checklist de bascule en production
 
 **À ne pas exécuter** tant que les points ci-dessous ne sont pas tous vrais.
-Cette tâche documente la bascule, elle ne la fait pas.
+Cette tâche documente la bascule, elle ne la fait pas. Aucune case ne doit
+être cochée par un agent : chacune engage de l'argent réel.
+
+### État constaté au 16/09/2026
+
+| Point | État |
+|---|---|
+| Compte bancaire rattaché | **non** — pas encore de compte pro ouvert |
+| Connect activé | **à vérifier** — jamais appelé en réel faute de clé secrète |
+| Règle fiscale confirmée | **non** — `fiscal_config.regle_confirmee = false` |
+| Mention 293 B en pied de facture | **à vérifier** dans le tableau de bord |
+| Prix en mode live | **non** — seuls les prix de test existent |
+| Clés live posées | **non** — même les clés de test ne sont pas posées |
+| Webhook live enregistré | **non** |
+| `DEMO = false` | **non**, et c'est voulu |
+| Vente réelle vérifiée | **non** |
+
+Rien n'est prêt pour la production, et rien ne doit l'être tant que le compte
+bancaire n'existe pas : sans IBAN, Stripe encaisserait sans pouvoir reverser,
+et les commissions des commerciaux resteraient bloquées chez la plateforme.
 
 - [ ] Un compte bancaire au nom de l'entreprise individuelle est rattaché à
       Stripe. Sans lui, Stripe encaisse mais retient les fonds.
