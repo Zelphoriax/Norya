@@ -6810,7 +6810,7 @@ function wire(){
   document.querySelectorAll("[data-go]").forEach(el => el.onclick = () => goTo(el.dataset.go));
 
   document.querySelectorAll("[data-billing]").forEach(el =>
-    el.onclick = e => { e.stopPropagation(); billingForm(el.dataset.billing); });
+    el.onclick = e => { e.stopPropagation(); encaisserForm(el.dataset.billing); });
 
   /* ----- Profil ----- */
   const pick = $("#pickPhoto");
@@ -7327,7 +7327,7 @@ function closeSaleForm(id){
         <b>${esc(p.company_name)}</b> passe en client.
         Un administrateur vérifiera la vente avant de valider votre commission.</p>
       <div class="alert" style="margin-bottom:16px">
-        Ne confirmez une vente que si le client a effectué le paiement.</div>
+        L'encaissement se fait ensuite, depuis la fiche du client.</div>
       <div class="field"><label for="s_note">Note (facultatif)</label>
         <textarea class="textarea" id="s_note" rows="3" placeholder="Détails utiles sur la vente…"></textarea></div>
       <p style="margin:14px 0 0;color:var(--muted);font-size:12px">
@@ -7666,50 +7666,58 @@ async function prospectDetail(id){
   });
 }
 
-/* ---------- Date de prélèvement ----------
-   Aucun paiement n'est déclenché pour l'instant : on enregistre
-   seulement le jour convenu avec le client. */
-function billingForm(id){
+/* ---------- Encaissement d'une vente ----------
+   Le jour de prélèvement se choisit ici, avant le paiement : il fixe l'ancre
+   de facturation côté Stripe, et ne peut donc plus être réglé après coup.
+   Cette page n'écrit jamais paid_at — c'est le webhook qui tranche, une fois
+   la banque d'accord. */
+function encaisserForm(id){
   const p = findProspect(id);
   if (!p) { toast("Fiche introuvable.", "err"); return; }
   const days = Array.from({length:28}, (_,i) => i+1);
   const m = modal({
-    title: "Prélèvement — " + p.company_name,
+    title: "Encaisser — " + p.company_name,
     body: `
       <p style="margin:0 0 16px;color:var(--muted);font-size:13px">
-        Jour du mois où la maintenance de ${eur(MAINTENANCE_FEE)} est prélevée.
-        Limité au 28 pour que la date existe tous les mois.</p>
-      <div class="field"><label for="b_day">Jour du prélèvement</label>
+        Le client règle ${eur(SITE_PRICE)} maintenant, par carte ou par prélèvement,
+        puis ${eur(MAINTENANCE_FEE)} le jour choisi de chaque mois. Le même moyen
+        de paiement sert pour les deux : il n'aura rien à ressaisir.</p>
+      <div class="field"><label for="b_day">Jour du prélèvement mensuel</label>
         <select class="select" id="b_day">
-          <option value="">Non défini</option>
           ${days.map(d => `<option value="${d}" ${p.billing_day===d?"selected":""}>Le ${d} de chaque mois</option>`).join("")}
         </select></div>
-      <div id="b_next" class="alert ok" style="${p.billing_day?"":"display:none"}"></div>
+      <div id="b_next" class="alert ok"></div>
+      <div id="b_err" class="alert err" style="display:none"></div>
       <p style="margin:14px 0 0;color:var(--muted);font-size:12px">
-        Le prélèvement automatique n'est pas encore branché. Cette date sert au suivi
-        et servira de base quand les paiements seront mis en place.</p>
+        Limité au 28 pour que la date existe tous les mois, février compris.</p>
     `,
     footer: `<button class="ihb ihb-ghost" id="cancel"><span class="ihb-label">Annuler</span><span class="ihb-fly"><span>Annuler</span><svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span><span class="ihb-dot" aria-hidden="true"></span></button>
-             <button class="ihb" id="save"><span class="ihb-label">Enregistrer</span><span class="ihb-fly"><span>Enregistrer</span><svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span><span class="ihb-dot" aria-hidden="true"></span></button>`
+             <button class="ihb" id="encaisser"><span class="ihb-label">Ouvrir le paiement</span><span class="ihb-fly"><span>Ouvrir le paiement</span><svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span><span class="ihb-dot" aria-hidden="true"></span></button>`
   });
 
-  const sel = m.querySelector("#b_day"), note = m.querySelector("#b_next");
-  const preview = () => {
-    const d = Number(sel.value);
-    if (!d){ note.style.display = "none"; return; }
-    note.style.display = ""; note.textContent = "Prochain prélèvement : " + nextBilling(d);
+  const sel = m.querySelector("#b_day");
+  const note = m.querySelector("#b_next");
+  const err  = m.querySelector("#b_err");
+  const apercu = () => {
+    note.textContent = "Première maintenance prélevée le " + nextBilling(Number(sel.value));
   };
-  sel.onchange = preview; preview();
+  sel.onchange = apercu; apercu();
 
   m.querySelector("#cancel").onclick = closeModal;
-  m.querySelector("#save").onclick = async () => {
+
+  /* Le bouton reste cliquable en toute circonstance : s'il manque quelque
+     chose, c'est la modale qui le dit, pas un bouton grisé. */
+  m.querySelector("#encaisser").onclick = async () => {
+    const btn = m.querySelector("#encaisser");
+    err.style.display = "none";
+    btnLabel(btn, "Ouverture…");
     try {
-      const day = sel.value ? Number(sel.value) : null;
-      const up = await store.updateProspect(id, { billing_day: day });
-      Object.assign(p, up);
-      closeModal(); render();
-      toast(day ? `Prélèvement fixé au ${day} du mois` : "Prélèvement retiré");
-    } catch (e) { toast("Échec : " + e.message, "err"); }
+      const { url } = await store.createCheckout(id, Number(sel.value));
+      window.location.href = url;
+    } catch (e) {
+      err.style.display = ""; err.textContent = e.message;
+      btnLabel(btn, "Ouvrir le paiement");
+    }
   };
 }
 
