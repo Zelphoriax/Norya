@@ -3509,7 +3509,13 @@ function signupStepHTML(key){
 
   if (key === "paiement") return `
     <div class="signup-step-title">Étape 4/4 — Paiement & sécurité</div>
-    <div class="field"><label>RIB</label>${fileDropHTML("su_rib", signupData.ribName)}</div>
+    <div class="field"><label>Compte de paiement</label>
+      <p style="margin:0 0 10px;color:var(--muted);font-size:12.5px">
+        Vos commissions sont versées par Stripe, qui vérifie votre identité et
+        recueille vos coordonnées bancaires directement — Norya ne les voit jamais.
+        Vous pouvez le faire maintenant ou plus tard depuis votre espace.</p>
+      <button type="button" class="ihb ihb-ghost" id="su_connect"><span class="ihb-label">Connecter mon compte de paiement</span><span class="ihb-fly"><span>Connecter mon compte de paiement</span><svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span><span class="ihb-dot" aria-hidden="true"></span></button>
+      <div id="su_connect_err" class="alert err" style="display:none;margin-top:10px"></div></div>
     <div class="field"><label for="su_pass">Mot de passe</label>
       <input class="input" id="su_pass" type="password" value="${esc(signupData.password||"")}" placeholder="8 caractères minimum" autocomplete="new-password" spellcheck="false">
       ${passwordStrengthHTML()}</div>`;
@@ -3655,7 +3661,6 @@ async function submitSignup(){
     siret: signupData.siret || "",
     rsac: signupData.rsac || "",
     justificatif_name: signupData.justificatifName || null,
-    rib_name: signupData.ribName || null,
     password_set: true,
     password_score: force.score
   });
@@ -3671,11 +3676,20 @@ function wireSignupFileInputs(key){
     };
   }
   if (key === "paiement"){
-    const f = $("#su_rib");
-    if (f) f.onchange = () => {
-      signupData.ribName = f.files[0]?.name || null;
-      const lbl = $("#su_rib_label");
-      if (lbl) lbl.textContent = signupData.ribName || "Choisir un fichier (PDF, JPG, PNG)";
+    /* L'onboarding est facultatif à l'inscription : un commercial s'inscrit,
+       vend, et sa commission attend sa vérification sans jamais le bloquer. */
+    const b = $("#su_connect");
+    if (b) b.onclick = async () => {
+      const err = $("#su_connect_err");
+      err.style.display = "none";
+      btnLabel(b, "Ouverture…");
+      try {
+        const { url } = await store.connectOnboarding();
+        window.location.href = url;
+      } catch (e) {
+        err.style.display = ""; err.textContent = e.message;
+        btnLabel(b, "Connecter mon compte de paiement");
+      }
     };
   }
 }
@@ -3692,7 +3706,7 @@ function validateSignupStep(key){
   if (key === "identite") return signupData.nom && signupData.prenom;
   if (key === "contact")  return signupData.email && signupData.telephone && signupData.adresse;
   if (key === "statut")   return signupData.siret && signupData.rsac && signupData.justificatifName;
-  if (key === "paiement") return signupData.ribName && signupData.password && signupData.password.length >= 8;
+  if (key === "paiement") return signupData.password && signupData.password.length >= 8;
   return true;
 }
 
