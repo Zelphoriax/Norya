@@ -172,14 +172,28 @@ On passe par le CLI plutôt que par le tableau de bord parce que les objets
 créés sont alors reproductibles, vérifiables, et consignés dans ce plan
 plutôt que dans une suite de clics que personne ne peut rejouer.
 
-- [ ] **Step 7: Vérifier qu'on est bien en mode test**
+- [ ] **Step 7: Se placer sur le bon sandbox**
+
+Ce compte en porte **deux**, et les objets créés dans l'un sont invisibles
+depuis l'autre :
+
+| Contexte | Compte |
+|---|---|
+| `Nova` | `acct_1UCXa9V05KpDxKCv` |
+| `environnement de test Nova` | `acct_1UCXaLV05C1skoFg` ← retenu |
 
 ```bash
+stripe switch context acct_1UCXaLV05C1skoFg
 stripe config --list
 ```
 
-Expected: une clé `test_mode_api_key` ou `test_mode_key_expires_at`, et
-**aucune** `live_mode_api_key` active.
+Expected: `display_name = 'environnement de test Nova'`. Sans `--live`, on
+reste en sandbox.
+
+Le choix n'est pas cosmétique : les `price_...` doivent vivre dans le même
+compte que la clé secrète posée à la tâche 15. Sinon le Checkout échoue sur
+un « No such price », erreur d'autant plus coûteuse qu'elle ne dit pas que
+le problème est un compte différent.
 
 - [ ] **Step 8: Créer les deux produits et leurs prix**
 
@@ -223,12 +237,25 @@ réglage de cette tâche qui n'a pas d'équivalent CLI.
 - [ ] **Step 10: Relever et vérifier les deux identifiants de prix**
 
 ```bash
-stripe prices list --limit 10
+stripe prices list --limit 10 2>/dev/null | sed -n '/^{/,$p'
 ```
+
+Le `sed` n'est pas une coquetterie : le CLI préfixe sa sortie d'une ligne
+« ▸ Running in … » et d'une balise `<claude-code-hint …/>`, qui font toutes
+deux échouer `JSON.parse`.
 
 Expected: deux prix, l'un `"type": "one_time"` à `80000`, l'autre
 `"type": "recurring"` à `4900` avec `"interval": "month"`, tous deux en
 `"currency": "eur"` et `"livemode": false`.
+
+Valeurs obtenues sur le sandbox `environnement de test Nova` — **de test,
+donc sans valeur de secret ; les identifiants live seront différents et
+n'iront que dans les secrets Supabase** :
+
+| Variable | Identifiant | Objet |
+|---|---|---|
+| `PRICE_SITE` | `price_1UG7ztV05C1skoFgYPbTxlSv` | `prod_VGfK2kdf3Dan3S` — 80000, ponctuel |
+| `PRICE_MAINTENANCE` | `price_1UG7zuV05C1skoFgNc2xp1mo` | `prod_VGfKcjyUg6GjUu` — 4900, mensuel |
 
 - [ ] **Step 11: Commit**
 
