@@ -98,29 +98,61 @@ si `stripe` reste introuvable, ouvrir un nouveau terminal, ou l'appeler par
 son chemin complet
 `$LOCALAPPDATA/Microsoft/WinGet/Packages/Stripe.StripeCli_*/stripe.exe`.
 
-- [ ] **Step 3: Déployer index.html sur Cloudflare Pages**
+- [ ] **Step 3: Construire un dossier de publication propre**
 
 ```bash
-wrangler pages project create norya --production-branch main
-wrangler pages deploy . --project-name norya --commit-dirty=true
+rm -rf dist && mkdir -p dist && cp index.html dist/index.html
 ```
 
-`wrangler` demandera une authentification par navigateur. Noter l'URL
-renvoyée, de la forme `https://norya.pages.dev`.
+**Ne jamais déployer la racine du dépôt.** Elle contient
+`prospects_norya.csv` — de vraies données de prospects, gitignorées
+précisément pour cela — et une sauvegarde `.bak` de 234 Ko. `wrangler` ne
+lit pas `.gitignore` : tout ce qui est dans le dossier pointé part en ligne.
 
-- [ ] **Step 4: Vérifier que la page se charge en ligne**
+- [ ] **Step 4: Déployer**
 
-Ouvrir l'URL. Attendu : l'écran de connexion de Norya s'affiche, `DEMO`
-valant toujours `true` à ce stade — donc le profil d'essai fonctionne et
-aucune vraie donnée n'est exposée.
+`wrangler` délègue désormais `pages` vers Workers ; la voie classique exige
+`--force`. On prend le successeur, qui fait la même chose pour un fichier
+statique. Créer `wrangler.jsonc` :
 
-- [ ] **Step 5: Ignorer les artefacts de déploiement**
+```jsonc
+{
+  "name": "norya",
+  "compatibility_date": "2026-09-15",
+  "assets": { "directory": "./dist" }
+}
+```
+
+puis :
+
+```bash
+wrangler login   # interactif : ouvre le navigateur par défaut
+wrangler deploy
+```
+
+Expected: `Read 1 file from the assets directory` — **un seul**. Si wrangler
+en annonce plusieurs, le dossier n'est pas propre : arrêter et vérifier.
+
+L'URL renvoyée est `NORYA_URL`. Sur ce compte :
+`https://norya.zx-zelph.workers.dev`.
+
+- [ ] **Step 5: Vérifier la mise en ligne et l'absence de fuite**
+
+```bash
+curl -s -o /dev/null -w "%{http_code} %{size_download}\n" https://norya.zx-zelph.workers.dev
+curl -s -o /dev/null -w "%{http_code}\n" https://norya.zx-zelph.workers.dev/prospects_norya.csv
+```
+
+Expected: `200` avec la taille exacte d'`index.html`, puis `404`. Vérifier
+aussi que la page déployée porte encore `const DEMO = true` : aucune donnée
+réelle ne doit être atteignable avant la tâche 16.
 
 Ajouter à `.gitignore` :
 
 ```
 .wrangler/
 supabase/.temp/
+dist/
 ```
 
 - [ ] **Step 6: Authentifier le CLI Stripe**
@@ -2097,7 +2129,7 @@ supabase secrets set \
   STRIPE_WEBHOOK_SECRET=whsec_... \
   PRICE_SITE=price_... \
   PRICE_MAINTENANCE=price_... \
-  NORYA_URL=https://norya.pages.dev
+  NORYA_URL=https://norya.zx-zelph.workers.dev
 ```
 
 - [ ] **Step 2: Déployer les trois fonctions**
@@ -2150,7 +2182,7 @@ dans la modale.
 
 - [ ] **Step 9: Garde démonstration en ligne**
 
-Sur `https://norya.pages.dev`, ouvrir un profil d'essai, tenter d'encaisser.
+Sur `https://norya.zx-zelph.workers.dev`, ouvrir un profil d'essai, tenter d'encaisser.
 Attendu : « Les paiements sont désactivés dans le profil d'essai », et
 **zéro** requête vers `/functions/v1/` dans l'onglet réseau.
 
