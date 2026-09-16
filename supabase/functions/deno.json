@@ -1,5 +1,8 @@
 {
-  "//": "supabase-js tire des dépendances npm (realtime-js). Sans nodeModulesDir en auto, deno check et deno test ne les résolvent pas hors du runtime Supabase.",
+  "//": [
+    "nodeModulesDir en auto : supabase-js tire des dépendances npm (realtime-js) que deno check et deno test ne résolvent pas hors du runtime Supabase.",
+    "no-import-prefix est désactivé : les Edge Functions Supabase s'importent en jsr: et npm:, c'est la forme documentée et la seule qui résolve à coup sûr dans leur runtime, où la lecture de cet import map n'est pas garantie."
+  ],
   "nodeModulesDir": "auto",
   "imports": {
     "stripe": "npm:stripe@17.7.0",
@@ -8,6 +11,11 @@
   },
   "tasks": {
     "test": "deno test --allow-all"
+  },
+  "lint": {
+    "rules": {
+      "exclude": ["no-import-prefix"]
+    }
   },
   "fmt": {
     "lineWidth": 100
