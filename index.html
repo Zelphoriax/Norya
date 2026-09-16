@@ -2416,9 +2416,14 @@ const store = {
     const { data, error } = await sb.from("applications").select("*").order("created_at",{ascending:false});
     if (error) throw error; return data;
   },
+  /* Déposé sans compte, depuis l'écran public : on n'en demande pas la
+     relecture. Un .select() ici ferait un RETURNING, que le déposant
+     anonyme n'a pas le droit de lire — et la file d'inscriptions ne doit
+     justement être lisible que par un administrateur. L'appelant ignore
+     la valeur de retour. */
   async createApplication(row){
-    const { data, error } = await sb.from("applications").insert(row).select().single();
-    if (error) throw error; return data;
+    const { error } = await sb.from("applications").insert(row);
+    if (error) throw error;
   },
   async updateApplication(id, patch){
     const { data, error } = await sb.from("applications").update(patch).eq("id", id).select().single();
