@@ -76,12 +76,14 @@ Rien de la suite n'est testable sans une URL `https` réelle : Stripe Checkout e
 `node` et `npm` sont présents ; `deno`, `supabase`, `stripe` et `wrangler` sont absents.
 
 ```bash
-npm install -g supabase wrangler deno
+winget install --id Stripe.StripeCLI --silent --accept-source-agreements --accept-package-agreements
+npm install -g --allow-scripts=deno,esbuild,workerd supabase wrangler deno
 ```
 
-Pour Stripe, télécharger la dernière version Windows depuis
-`https://github.com/stripe/stripe-cli/releases/latest`, décompresser
-`stripe.exe` dans un dossier du `PATH`.
+`--allow-scripts` n'est pas optionnel : ce sont les scripts de
+post-installation de `deno`, `esbuild` et `workerd` qui téléchargent leurs
+binaires. Sans lui, npm signale « added 44 packages » et les commandes
+échouent quand même.
 
 - [ ] **Step 2: Vérifier que les quatre répondent**
 
@@ -90,6 +92,11 @@ supabase --version && wrangler --version && deno --version && stripe --version
 ```
 
 Expected: quatre numéros de version, aucun « command not found ».
+
+winget modifie le `PATH` mais ne rafraîchit pas les shells déjà ouverts :
+si `stripe` reste introuvable, ouvrir un nouveau terminal, ou l'appeler par
+son chemin complet
+`$LOCALAPPDATA/Microsoft/WinGet/Packages/Stripe.StripeCli_*/stripe.exe`.
 
 - [ ] **Step 3: Déployer index.html sur Cloudflare Pages**
 
@@ -116,46 +123,82 @@ Ajouter à `.gitignore` :
 supabase/.temp/
 ```
 
-- [ ] **Step 6: Créer les deux produits en mode test Stripe**
+- [ ] **Step 6: Authentifier le CLI Stripe**
 
-Vérifier d'abord que le tableau de bord est bien en **mode test** (interrupteur
-« Test mode » actif, en haut à droite). Tout ce qui suit se fait en test : rien
-ne déplace d'argent.
+À lancer dans un terminal interactif : la commande affiche un code
+d'appariement et attend une validation dans le navigateur.
 
-Produits → Ajouter un produit, deux fois :
+```bash
+stripe login
+```
 
-| Nom | Description | Tarification | Montant | Récurrence |
-|---|---|---|---|---|
-| Site internet | Création du site, facturée à la signature | Ponctuelle | 800,00 € | — |
-| Maintenance Norya | Hébergement et maintenance du site | Récurrente | 49,00 € | Mensuelle |
+Le navigateur par défaut s'ouvre sur la page de confirmation ; vérifier que
+le code affiché correspond, puis confirmer. Le CLI se place en **mode test**
+par défaut — aucune commande ci-dessous ne touche au mode live.
 
-Devise EUR dans les deux cas. **Ne pas** activer Stripe Tax et **ne pas**
-cocher de comportement fiscal : la structure est en franchise en base, les
-prix sont les prix.
+On passe par le CLI plutôt que par le tableau de bord parce que les objets
+créés sont alors reproductibles, vérifiables, et consignés dans ce plan
+plutôt que dans une suite de clics que personne ne peut rejouer.
 
-- [ ] **Step 7: Poser la mention de franchise sur les factures**
+- [ ] **Step 7: Vérifier qu'on est bien en mode test**
 
-Réglages → Facturation → Modèles de facture : renseigner en pied de facture
+```bash
+stripe config --list
+```
+
+Expected: une clé `test_mode_api_key` ou `test_mode_key_expires_at`, et
+**aucune** `live_mode_api_key` active.
+
+- [ ] **Step 8: Créer les deux produits et leurs prix**
+
+Les montants sont en **centimes** : `80000` et non `800`. Ni Stripe Tax ni
+comportement fiscal — la structure est en franchise en base, les prix sont
+les prix.
+
+```bash
+stripe products create \
+  --name="Site internet" \
+  --description="Création du site, facturée à la signature"
+
+stripe products create \
+  --name="Maintenance Norya" \
+  --description="Hébergement et maintenance du site"
+```
+
+Puis, avec les `prod_...` renvoyés :
+
+```bash
+stripe prices create \
+  --product=prod_SITE --currency=eur --unit-amount=80000
+
+stripe prices create \
+  --product=prod_MAINTENANCE --currency=eur --unit-amount=4900 \
+  -d "recurring[interval]=month"
+```
+
+- [ ] **Step 9: Poser la mention de franchise sur les factures**
+
+Dans le tableau de bord, Réglages → Facturation → Modèles de facture,
+renseigner en pied de facture :
 
 ```
 TVA non applicable, art. 293 B du CGI
 ```
 
-Sans cette mention, les factures émises sont non conformes.
+Sans cette mention, les factures émises sont non conformes. C'est le seul
+réglage de cette tâche qui n'a pas d'équivalent CLI.
 
-- [ ] **Step 8: Relever les deux identifiants de prix**
-
-Sur chaque produit, copier l'identifiant du prix, de la forme `price_...`.
+- [ ] **Step 10: Relever et vérifier les deux identifiants de prix**
 
 ```bash
 stripe prices list --limit 10
 ```
 
-Expected: les deux prix apparaissent, l'un `"type": "one_time"` à `80000`,
-l'autre `"type": "recurring"` à `4900` avec `"interval": "month"`. Vérifier
-que les montants sont bien en **centimes** : `80000` et non `800`.
+Expected: deux prix, l'un `"type": "one_time"` à `80000`, l'autre
+`"type": "recurring"` à `4900` avec `"interval": "month"`, tous deux en
+`"currency": "eur"` et `"livemode": false`.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
 git add .gitignore
