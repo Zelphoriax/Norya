@@ -71,7 +71,7 @@ Rien de la suite n'est testable sans une URL `https` réelle : Stripe Checkout e
   - `PRICE_SITE` — identifiant du prix ponctuel de 800 €, consommé par la tâche 5.
   - `PRICE_MAINTENANCE` — identifiant du prix récurrent de 49 €/mois, consommé par la tâche 5.
 
-- [ ] **Step 1: Installer les quatre CLI manquantes**
+- [x] **Step 1: Installer les quatre CLI manquantes**
 
 `node` et `npm` sont présents ; `deno`, `supabase`, `stripe` et `wrangler` sont absents.
 
@@ -85,7 +85,7 @@ post-installation de `deno`, `esbuild` et `workerd` qui téléchargent leurs
 binaires. Sans lui, npm signale « added 44 packages » et les commandes
 échouent quand même.
 
-- [ ] **Step 2: Vérifier que les quatre répondent**
+- [x] **Step 2: Vérifier que les quatre répondent**
 
 ```bash
 supabase --version && wrangler --version && deno --version && stripe --version
@@ -98,7 +98,7 @@ si `stripe` reste introuvable, ouvrir un nouveau terminal, ou l'appeler par
 son chemin complet
 `$LOCALAPPDATA/Microsoft/WinGet/Packages/Stripe.StripeCli_*/stripe.exe`.
 
-- [ ] **Step 3: Construire un dossier de publication propre**
+- [x] **Step 3: Construire un dossier de publication propre**
 
 ```bash
 rm -rf dist && mkdir -p dist && cp index.html dist/index.html
@@ -109,7 +109,7 @@ rm -rf dist && mkdir -p dist && cp index.html dist/index.html
 précisément pour cela — et une sauvegarde `.bak` de 234 Ko. `wrangler` ne
 lit pas `.gitignore` : tout ce qui est dans le dossier pointé part en ligne.
 
-- [ ] **Step 4: Déployer**
+- [x] **Step 4: Déployer**
 
 `wrangler` délègue désormais `pages` vers Workers ; la voie classique exige
 `--force`. On prend le successeur, qui fait la même chose pour un fichier
@@ -136,7 +136,7 @@ en annonce plusieurs, le dossier n'est pas propre : arrêter et vérifier.
 L'URL renvoyée est `NORYA_URL`. Sur ce compte :
 `https://norya.zx-zelph.workers.dev`.
 
-- [ ] **Step 5: Vérifier la mise en ligne et l'absence de fuite**
+- [x] **Step 5: Vérifier la mise en ligne et l'absence de fuite**
 
 ```bash
 curl -s -o /dev/null -w "%{http_code} %{size_download}\n" https://norya.zx-zelph.workers.dev
@@ -155,7 +155,7 @@ supabase/.temp/
 dist/
 ```
 
-- [ ] **Step 6: Authentifier le CLI Stripe**
+- [x] **Step 6: Authentifier le CLI Stripe**
 
 À lancer dans un terminal interactif : la commande affiche un code
 d'appariement et attend une validation dans le navigateur.
@@ -172,7 +172,7 @@ On passe par le CLI plutôt que par le tableau de bord parce que les objets
 créés sont alors reproductibles, vérifiables, et consignés dans ce plan
 plutôt que dans une suite de clics que personne ne peut rejouer.
 
-- [ ] **Step 7: Se placer sur le bon sandbox**
+- [x] **Step 7: Se placer sur le bon sandbox**
 
 Ce compte en porte **deux**, et les objets créés dans l'un sont invisibles
 depuis l'autre :
@@ -195,7 +195,7 @@ compte que la clé secrète posée à la tâche 15. Sinon le Checkout échoue su
 un « No such price », erreur d'autant plus coûteuse qu'elle ne dit pas que
 le problème est un compte différent.
 
-- [ ] **Step 8: Créer les deux produits et leurs prix**
+- [x] **Step 8: Créer les deux produits et leurs prix**
 
 Les montants sont en **centimes** : `80000` et non `800`. Ni Stripe Tax ni
 comportement fiscal — la structure est en franchise en base, les prix sont
@@ -234,7 +234,7 @@ TVA non applicable, art. 293 B du CGI
 Sans cette mention, les factures émises sont non conformes. C'est le seul
 réglage de cette tâche qui n'a pas d'équivalent CLI.
 
-- [ ] **Step 10: Relever et vérifier les deux identifiants de prix**
+- [x] **Step 10: Relever et vérifier les deux identifiants de prix**
 
 ```bash
 stripe prices list --limit 10 2>/dev/null | sed -n '/^{/,$p'
@@ -257,7 +257,7 @@ n'iront que dans les secrets Supabase** :
 | `PRICE_SITE` | `price_1UG7ztV05C1skoFgYPbTxlSv` | `prod_VGfK2kdf3Dan3S` — 80000, ponctuel |
 | `PRICE_MAINTENANCE` | `price_1UG7zuV05C1skoFgNc2xp1mo` | `prod_VGfKcjyUg6GjUu` — 4900, mensuel |
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add .gitignore
@@ -710,7 +710,7 @@ git commit -m "feat(functions): add shared modules and tested billing anchor"
 - Consumes: `ancreFacturation`, `stripe`, `db`, `reponse`, `CORS` (Task 4) ; colonnes de la Task 2 ; `NORYA_URL` (Task 1).
 - Produces: `POST /functions/v1/create-checkout`, corps `{ prospect_id: string, billing_day: number }`, réponse `{ url: string }`. Consommée par la tâche 9.
 
-- [ ] **Step 1: Écrire la fonction**
+- [x] **Step 1: Écrire la fonction**
 
 ```ts
 import { stripe } from "../_shared/stripe.ts";
@@ -800,7 +800,7 @@ Le prix ponctuel des 800 € est placé **après** le prix récurrent dans
 première facture, ce qui encaisse le site et arme la maintenance en une seule
 opération.
 
-- [ ] **Step 2: Vérifier le typage**
+- [x] **Step 2: Vérifier le typage**
 
 ```bash
 deno check supabase/functions/create-checkout/index.ts
@@ -808,7 +808,7 @@ deno check supabase/functions/create-checkout/index.ts
 
 Expected: aucune erreur.
 
-- [ ] **Step 3: Vérifier qu'une requête sans jeton est refusée**
+- [x] **Step 3: Vérifier qu'une requête sans jeton est refusée**
 
 ```bash
 supabase functions serve create-checkout --no-verify-jwt &
@@ -819,7 +819,7 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST \
 
 Expected: `401`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add supabase/functions/create-checkout/
@@ -837,7 +837,7 @@ git commit -m "feat(functions): add create-checkout"
 - Consumes: `stripe`, `db`, `reponse`, `CORS` (Task 4) ; `profiles.stripe_account_id` (Task 2).
 - Produces: `POST /functions/v1/connect-onboarding`, corps vide, réponse `{ url: string }`. Consommée par les tâches 12 et 13.
 
-- [ ] **Step 1: Écrire la fonction**
+- [x] **Step 1: Écrire la fonction**
 
 ```ts
 import { stripe } from "../_shared/stripe.ts";
@@ -886,7 +886,7 @@ Deno.serve(async (req) => {
 });
 ```
 
-- [ ] **Step 2: Vérifier le typage**
+- [x] **Step 2: Vérifier le typage**
 
 ```bash
 deno check supabase/functions/connect-onboarding/index.ts
@@ -894,7 +894,7 @@ deno check supabase/functions/connect-onboarding/index.ts
 
 Expected: aucune erreur.
 
-- [ ] **Step 3: Vérifier le refus sans jeton**
+- [x] **Step 3: Vérifier le refus sans jeton**
 
 ```bash
 supabase functions serve connect-onboarding --no-verify-jwt &
@@ -904,7 +904,7 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST \
 
 Expected: `401`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add supabase/functions/connect-onboarding/
