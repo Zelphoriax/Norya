@@ -1200,6 +1200,8 @@ select.pill option{background:#121613;color:var(--text)}
   background:var(--amber-soft);color:var(--amber);border:1px solid rgba(224,163,58,.28);
 }
 .alert.ok{background:var(--accent-soft);color:var(--accent);border-color:var(--accent-dim)}
+/* Un refus de paiement doit se lire comme un refus, pas comme un avertissement. */
+.alert.err{background:var(--red-soft);color:var(--red);border-color:rgba(242,96,92,.28)}
 .alert b{font-weight:600}
 
 .icon-btn{
@@ -5159,6 +5161,28 @@ function monthResult(m){
   return { n: sales.length, ca: sales.reduce((s,p) => s + Number(p.sale_amount||0), 0), sales };
 }
 
+/* État du compte de paiement du commercial, dans son propre espace : on
+   s'adresse à lui à la deuxième personne. Trois états, aucun blocage — il
+   vend normalement, et la commission suit dès que Stripe a vérifié. Rien ne
+   s'affiche quand tout est en ordre : un bandeau permanent finirait par ne
+   plus être lu. */
+function bandeauStripe(me){
+  if (!me || me.stripe_payouts_enabled) return "";
+  const enCours = !!me.stripe_account_id;
+  const libelle = enCours ? "Reprendre la vérification" : "Connecter mon compte";
+  return `
+    <div class="alert" style="margin-bottom:14px">
+      <b>${enCours
+        ? "Votre compte de paiement est en cours de vérification."
+        : "Vous n'avez pas encore connecté de compte de paiement."}</b><br>
+      ${enCours
+        ? "Vos commissions sont mises de côté et vous seront versées automatiquement dès que Stripe aura terminé."
+        : "Vous pouvez vendre dès maintenant : vos commissions vous attendront jusque-là."}
+      <div style="margin-top:10px"><button class="ihb ihb-ghost" id="stripeConnect"><span class="ihb-label">${libelle}</span><span class="ihb-fly"><span>${libelle}</span><svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span><span class="ihb-dot" aria-hidden="true"></span></button></div>
+      <div id="stripeConnectErr" class="alert err" style="display:none;margin-top:10px"></div>
+    </div>`;
+}
+
 function viewObjectifs(){
   const cur = shiftMonth(0);
   const me = viewer();
@@ -5245,6 +5269,7 @@ function viewObjectifs(){
       <p>Fixez votre objectif mensuel.</p>
     </div>
   </div>
+  ${bandeauStripe(me)}
   ${perso}
   ${history}`;
 }
@@ -6573,6 +6598,22 @@ function confirmerEnregistrement(texte){
    8. Interactions
    ========================================================= */
 function wire(){
+  const sc = $("#stripeConnect");
+  if (sc) sc.onclick = async () => {
+    const err = $("#stripeConnectErr");
+    const libelle = sc.querySelector(".ihb-label")?.textContent.trim() || "Connecter mon compte";
+    if (err) err.style.display = "none";
+    btnLabel(sc, "Ouverture…");
+    try {
+      const { url } = await store.connectOnboarding();
+      window.location.href = url;
+    } catch (e) {
+      if (err){ err.style.display = ""; err.textContent = e.message; }
+      else toast(e.message, "err");
+      btnLabel(sc, libelle);
+    }
+  };
+
   const editGoal = $("#editGoal");
   if (editGoal) editGoal.onclick = goalForm;
   const q = $("#q");
