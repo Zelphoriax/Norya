@@ -278,7 +278,7 @@ Supabase à la tâche 15.
 **Interfaces:**
 - Produces: tables `payments`, `commission_transfers`, `stripe_events` ; colonnes `profiles.stripe_account_id`, `profiles.stripe_payouts_enabled`, `prospects.stripe_customer_id`, `prospects.stripe_subscription_id`, `prospects.payment_status`. Consommées par les tâches 3, 5, 6, 7, 8, 11, 13, 14.
 
-- [ ] **Step 1: Écrire la migration de schéma**
+- [x] **Step 1: Écrire la migration de schéma**
 
 `supabase/migrations/20260916120000_paiements_schema.sql` :
 
@@ -347,7 +347,7 @@ L'index unique sur `commission_transfers(payment_id)` est la deuxième
 ceinture : même si l'idempotence par `stripe_events` échouait, la base
 refuserait une seconde commission sur le même encaissement.
 
-- [ ] **Step 2: Écrire la migration RLS**
+- [x] **Step 2: Écrire la migration RLS**
 
 `supabase/migrations/20260916120100_paiements_rls.sql` :
 
@@ -380,7 +380,7 @@ create policy transfers_lecture on commission_transfers for select
 -- stripe_events n'a aucune politique : il est invisible aux clients.
 ```
 
-- [ ] **Step 3: Appliquer les migrations sur la base locale**
+- [x] **Step 3: Appliquer les migrations sur la base locale**
 
 ```bash
 supabase start
@@ -389,7 +389,7 @@ supabase db reset
 
 Expected: les deux migrations s'appliquent sans erreur.
 
-- [ ] **Step 4: Vérifier les contraintes**
+- [x] **Step 4: Vérifier les contraintes**
 
 ```bash
 supabase db reset && psql "$(supabase status -o json | node -e "process.stdin.on('data',d=>console.log(JSON.parse(d).DB_URL))")" -c "
@@ -401,7 +401,7 @@ supabase db reset && psql "$(supabase status -o json | node -e "process.stdin.on
 Expected: ÉCHEC avec une violation de clé étrangère sur `prospect_id` —
 ce qui prouve que la contrainte mord.
 
-- [ ] **Step 5: Vérifier qu'un statut invalide est refusé**
+- [x] **Step 5: Vérifier qu'un statut invalide est refusé**
 
 ```bash
 psql "$DB_URL" -c "update prospects set payment_status = 'nimporte_quoi';"
@@ -409,7 +409,7 @@ psql "$DB_URL" -c "update prospects set payment_status = 'nimporte_quoi';"
 
 Expected: ÉCHEC, `prospects_payment_status_valide` violée.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add supabase/migrations/20260916120000_paiements_schema.sql \
@@ -433,7 +433,7 @@ reste à confirmer, donc elle ne doit exister nulle part en dur.
   `annee, ca_cents, seuil_franchise_cents, seuil_tolerance_cents, ca_base,
   regle_confirmee`. Consommée par la tâche 14.
 
-- [ ] **Step 1: Écrire la migration**
+- [x] **Step 1: Écrire la migration**
 
 ```sql
 create table if not exists fiscal_config (
@@ -488,7 +488,7 @@ qu'une année sans aucun encaissement renvoie bien une ligne à `0`, plutôt
 qu'aucune ligne. Sans cela la jauge de la tâche 14 n'afficherait rien du tout
 au lieu d'afficher zéro.
 
-- [ ] **Step 2: Appliquer et vérifier le cas vide**
+- [x] **Step 2: Appliquer et vérifier le cas vide**
 
 ```bash
 supabase db reset
@@ -498,7 +498,7 @@ psql "$DB_URL" -c "select * from ca_annuel where annee = 2026;"
 Expected: une ligne, `ca_cents = 0`, `ca_base = brut_encaisse`,
 `regle_confirmee = f`.
 
-- [ ] **Step 3: Vérifier les deux bases de calcul**
+- [x] **Step 3: Vérifier les deux bases de calcul**
 
 Insérer un prospect, un profil, un encaissement de 800 € et une commission
 de 320 € versée, puis :
@@ -517,7 +517,7 @@ psql "$DB_URL" -c "update fiscal_config set ca_base = 'brut_encaisse' where anne
 Expected: `80000` puis `48000`. Basculer la règle est bien un `UPDATE`,
 sans redéploiement ni modification de code.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add supabase/migrations/20260916120200_fiscal_config.sql
@@ -549,7 +549,7 @@ autrement, la date annoncée au client et la date facturée divergeraient.
   - `CORS: Record<string,string>`, `reponse(corps: unknown, statut?: number): Response`
   - `ancreFacturation(jour: number, maintenant: Date): number` — horodatage **en secondes**, format attendu par Stripe.
 
-- [ ] **Step 1: Écrire le test de l'ancre**
+- [x] **Step 1: Écrire le test de l'ancre**
 
 `supabase/functions/_shared/ancre_test.ts` :
 
@@ -590,7 +590,7 @@ Deno.test("jour hors plage refuse", () => {
 });
 ```
 
-- [ ] **Step 2: Lancer le test, vérifier qu'il échoue**
+- [x] **Step 2: Lancer le test, vérifier qu'il échoue**
 
 ```bash
 deno test supabase/functions/_shared/ancre_test.ts --allow-all
@@ -598,7 +598,7 @@ deno test supabase/functions/_shared/ancre_test.ts --allow-all
 
 Expected: ÉCHEC — `Module not found "./ancre.ts"`.
 
-- [ ] **Step 3: Écrire l'ancre**
+- [x] **Step 3: Écrire l'ancre**
 
 `supabase/functions/_shared/ancre.ts` :
 
@@ -620,7 +620,7 @@ export function ancreFacturation(jour: number, maintenant: Date): number {
 }
 ```
 
-- [ ] **Step 4: Lancer le test, vérifier qu'il passe**
+- [x] **Step 4: Lancer le test, vérifier qu'il passe**
 
 ```bash
 deno test supabase/functions/_shared/ancre_test.ts --allow-all
@@ -628,7 +628,7 @@ deno test supabase/functions/_shared/ancre_test.ts --allow-all
 
 Expected: `ok | 6 passed | 0 failed`.
 
-- [ ] **Step 5: Écrire les trois autres modules partagés**
+- [x] **Step 5: Écrire les trois autres modules partagés**
 
 `supabase/functions/_shared/config.ts` :
 
@@ -684,7 +684,7 @@ export function reponse(corps: unknown, statut = 200): Response {
 }
 ```
 
-- [ ] **Step 6: Vérifier que tout se type et se charge**
+- [x] **Step 6: Vérifier que tout se type et se charge**
 
 ```bash
 deno check supabase/functions/_shared/*.ts
@@ -692,7 +692,7 @@ deno check supabase/functions/_shared/*.ts
 
 Expected: aucune erreur.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add supabase/functions/_shared/
@@ -931,7 +931,7 @@ C'est ce qui rend la règle de versement réellement testable.
   - `effetsPour(event: { type: string; data: { object: Record<string, unknown> } }, ctx: Contexte): Effet[]`
   Consommés par la tâche 8.
 
-- [ ] **Step 1: Écrire les tests**
+- [x] **Step 1: Écrire les tests**
 
 `supabase/functions/stripe-webhook/effets_test.ts` :
 
@@ -1051,7 +1051,7 @@ Deno.test("evenement inconnu : aucun effet", () => {
 });
 ```
 
-- [ ] **Step 2: Lancer les tests, vérifier qu'ils échouent**
+- [x] **Step 2: Lancer les tests, vérifier qu'ils échouent**
 
 ```bash
 deno test supabase/functions/stripe-webhook/effets_test.ts --allow-all
@@ -1059,7 +1059,7 @@ deno test supabase/functions/stripe-webhook/effets_test.ts --allow-all
 
 Expected: ÉCHEC — `Module not found "./effets.ts"`.
 
-- [ ] **Step 3: Écrire la décision**
+- [x] **Step 3: Écrire la décision**
 
 `supabase/functions/stripe-webhook/effets.ts` :
 
@@ -1165,7 +1165,7 @@ premier mois de maintenance. Enregistrer ce total comme prix du site
 fausserait le compteur de CA et les 320 € de commission. On prend la
 constante.
 
-- [ ] **Step 4: Lancer les tests, vérifier qu'ils passent**
+- [x] **Step 4: Lancer les tests, vérifier qu'ils passent**
 
 ```bash
 deno test supabase/functions/stripe-webhook/effets_test.ts --allow-all
@@ -1173,7 +1173,7 @@ deno test supabase/functions/stripe-webhook/effets_test.ts --allow-all
 
 Expected: `ok | 9 passed | 0 failed`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add supabase/functions/stripe-webhook/effets.ts \
