@@ -1,9 +1,20 @@
 /**
- * Ouvre l'onboarding Stripe Connect Express d'un commercial.
+ * Ouvre l'onboarding Stripe Connect d'un commercial.
  *
  * C'est Stripe qui vérifie son identité et recueille ses coordonnées
  * bancaires : Norya ne les voit jamais et n'en garde rien, seulement
  * l'identifiant du compte lié.
+ *
+ * Accounts v2, et non v1 : Stripe refuse désormais `POST /v1/accounts` pour
+ * une intégration neuve — « Stripe no longer recommends Accounts v1 for new
+ * Connect integrations ». On pourrait réactiver v1 par un réglage du tableau
+ * de bord, mais ce serait s'endetter dès le premier jour sur un chemin que
+ * Stripe déconseille.
+ *
+ * Configuration `recipient` seule : le commercial reçoit des virements sur son
+ * solde Stripe, il n'encaisse jamais le client lui-même. Lui accorder
+ * `merchant` lui donnerait le droit de facturer en son nom, ce qu'on ne veut
+ * pas — c'est Norya qui vend.
  *
  * Idempotent : rappelée, la fonction ne crée pas un second compte, elle
  * renvoie un nouveau lien vers le même. Un lien d'onboarding expire vite, donc
@@ -38,14 +49,36 @@ Deno.serve(async (req) => {
   try {
     let compte = profil.stripe_account_id;
     if (!compte) {
-      const c = await stripe.accounts.create({
-        type: "express",
-        country: "FR",
-        email: profil.email ?? undefined,
-        business_type: "individual",
-        // Seuls les virements sont demandés : le commercial reçoit sa
-        // commission, il n'encaisse jamais lui-même le client.
-        capabilities: { transfers: { requested: true } },
+      const c = await stripe.v2.core.accounts.create({
+        contact_email: profil.email ?? undefined,
+        display_name: profil.full_name ?? undefined,
+        identity: { country: "fr", entity_type: "individual" },
+        configuration: {
+          recipient: {
+            capabilities: {
+              stripe_balance: {
+                // Recevoir les virements de commission sur son solde Stripe.
+                // Le reversement vers sa banque se règle ensuite dans son
+                // tableau de bord Express : ce n'est pas à demander ici.
+                stripe_transfers: { requested: true },
+              },
+            },
+          },
+        },
+        // Qui porte les frais et les pertes. Les deux reviennent à Norya :
+        // c'est elle qui vend, elle qui encaisse le client, et le commercial
+        // ne reçoit qu'une commission. Lui faire porter les frais Stripe
+        // rognerait ses 320 €, et lui faire porter un impayé lui ferait payer
+        // un défaut de paiement d'un client qui n'est pas le sien.
+        defaults: {
+          responsibilities: {
+            fees_collector: "application",
+            losses_collector: "application",
+          },
+        },
+        // Stripe héberge le tableau de bord du commercial : Norya n'a pas à
+        // reconstruire un espace de suivi des virements.
+        dashboard: "express",
         metadata: { profile_id: profil.id },
       });
       compte = c.id;
@@ -53,11 +86,16 @@ Deno.serve(async (req) => {
     }
 
     const racine = Deno.env.get("NORYA_URL") ?? "";
-    const lien = await stripe.accountLinks.create({
+    const lien = await stripe.v2.core.accountLinks.create({
       account: compte,
-      type: "account_onboarding",
-      refresh_url: `${racine}/?stripe=reprendre`,
-      return_url: `${racine}/?stripe=termine`,
+      use_case: {
+        type: "account_onboarding",
+        account_onboarding: {
+          configurations: ["recipient"],
+          refresh_url: `${racine}/?stripe=reprendre`,
+          return_url: `${racine}/?stripe=termine`,
+        },
+      },
     });
 
     return reponse({ url: lien.url });

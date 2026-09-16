@@ -1,4 +1,4 @@
-import Stripe from "npm:stripe@17.7.0";
+import Stripe from "npm:stripe@22.6.2";
 
 /**
  * Client Stripe pour Deno.

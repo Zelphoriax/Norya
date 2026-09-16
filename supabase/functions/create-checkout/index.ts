@@ -14,6 +14,7 @@ import { stripe, stripeConfigure, STRIPE_ABSENT } from "../_shared/stripe.ts";
 import { db } from "../_shared/db.ts";
 import { reponse, CORS } from "../_shared/cors.ts";
 import { ancreFacturation } from "../_shared/ancre.ts";
+import { prix } from "../_shared/prix.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
@@ -85,22 +86,30 @@ Deno.serve(async (req) => {
       commercial_id: fiche.assigned_to ?? "",
     };
 
+    // Résolus par clé de recherche dans le compte de la clé secrète, jamais
+    // recopiés d'un compte à l'autre.
+    const tarifs = await prix();
+
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       customer: clientId,
       line_items: [
-        { price: Deno.env.get("PRICE_MAINTENANCE") ?? "", quantity: 1 },
+        { price: tarifs.maintenance, quantity: 1 },
         // Prix ponctuel : en mode subscription il n'apparaît que sur la
         // première facture, ce qui encaisse le site et arme la maintenance
         // en une seule opération.
-        { price: Deno.env.get("PRICE_SITE") ?? "", quantity: 1 },
+        { price: tarifs.site, quantity: 1 },
       ],
       payment_method_types: ["card", "sepa_debit"],
       locale: "fr",
       subscription_data: {
-        billing_cycle_anchor: ancre,
-        // Sans cela le client paierait en plus un prorata jusqu'à l'ancre.
-        proration_behavior: "none",
+        // Et non billing_cycle_anchor : Stripe refuse proration_behavior
+        // « none » dès qu'une session contient un prix ponctuel, et sans lui
+        // le client se verrait facturer en plus un prorata de maintenance
+        // jusqu'à l'ancre — ce que la modale ne lui annonce pas. Une période
+        // d'essai jusqu'au jour choisi donne le comportement promis : 800 €
+        // aujourd'hui, puis 49 € le jour dit, et tous les mois à cette date.
+        trial_end: ancre,
         metadata: meta,
       },
       metadata: meta,
