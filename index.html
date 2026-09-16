@@ -1836,9 +1836,27 @@ const LEGACY_STATUS = { contacte:"À contacter", relance:"À contacter", interes
 const statusLabel = k => STATUSES[k] || LEGACY_STATUS[k] || "—";
 
 /* Classe de pastille : une vente conclue non encaissée se distingue
-   des ventes réglées, pour qu'on ne confonde pas signé et payé. */
-const pillClass = p => p.status === "conclu" && !p.paid_at ? "attente" : p.status;
-const pillLabel = p => p.status === "conclu" && !p.paid_at ? "Conclu · à encaisser" : statusLabel(p.status);
+   des ventes réglées, pour qu'on ne confonde pas signé et payé.
+   Le prélèvement SEPA met cinq jours ouvrés à se compenser : sans un état
+   pour ce délai, une vente payée serait indiscernable d'une impayée
+   pendant toute une semaine.
+   L'ordre des tests compte — paid_at l'emporte sur payment_status, sinon
+   une vente réglée resterait affichée « en compensation » tant que le
+   statut n'aurait pas été rafraîchi. */
+const pillClass = p => {
+  if (p.status !== "conclu") return p.status;
+  if (p.paid_at) return "conclu";
+  if (p.payment_status === "echec" || p.payment_status === "litige") return "refuse";
+  return "attente";
+};
+const pillLabel = p => {
+  if (p.status !== "conclu") return statusLabel(p.status);
+  if (p.paid_at)                       return statusLabel("conclu");
+  if (p.payment_status === "litige")   return "Litige en cours";
+  if (p.payment_status === "echec")    return "Paiement refusé";
+  if (p.payment_status === "en_cours") return "Conclu · compensation en cours";
+  return "Conclu · à encaisser";
+};
 
 /* Couleur de chaque statut dans les graphiques. */
 const STATUS_COLOR = {
