@@ -2181,13 +2181,52 @@ le décalage impossible au lieu de rare.
 prix ponctuel. Remplaé par `trial_end` jusqu'au jour choisi, ce qui donne
 exactement ce que la modale promet plutôt qu'un prorata non annoncé.
 
+### Paiement réel vérifié — 17/17
+
+Un vrai paiement de test par carte a traversé toute la chaîne :
+
+```
+paid_at écrit par le webhook   2026-09-16T06:11:43
+statut                          regle
+encaissement                    site · 80000 · paye · in_1UGC4E…
+commission                      32000 · en_attente_onboarding
+CA de l'année                   80000
+```
+
+Le second verrou contre un double versement est prouvé lui aussi : une
+seconde ligne de commission sur le même encaissement est refusée par
+`commission_transfers_payment_unique`.
+
+**Le premier paiement de test a révélé un bug grave** : `invoice.paid`
+n'a rien fait du tout, en répondant 200. Stripe a déplacé
+`invoice.subscription_details` sous `invoice.parent.subscription_details`
+avec l'API 2025 ; la lecture revenait vide et les gardes « pas de fiche,
+on ne fait rien » ont avalé un encaissement de 800 € en silence. Corrigé
+en deux temps : résolution de la fiche côté serveur avec repli sur le
+client Stripe, et une facture non rattachable lève désormais au lieu de
+se taire.
+
 ### Ce qui reste, et pourquoi
 
-Les étapes 3 à 8 demandent une transaction réelle : saisir une carte ou un
-IBAN dans le formulaire Stripe, ce que l'agent ne fait pas. Un jeu d'essai
-durable est en place pour cela — fiche « ESSAI-PAIEMENT », commercial
-`essai-paiement@norya.invalid`, compte lié `acct_1UGBYyV05KrGGmso` — avec une
-URL de paiement prête à cliquer. À supprimer une fois la vérification faite.
+**Étapes 4 et 5 — SEPA.** Demandent un paiement par prélèvement, donc un
+IBAN saisi dans le formulaire Stripe. Les IBAN de test sont
+`FR1420041010050500013M02606` (se compense) et `…M02607` (échoue).
+
+**Étape 6 — seconde moitié.** La mise en file est vérifiée ; le passage
+automatique à `verse` quand le commercial termine sa vérification ne l'est
+pas, faute d'un `account.updated` réel.
+
+**Étape 8 — ancre.** `ancreFacturation` est couverte par huit tests
+unitaires, changements d'heure compris, mais l'objet Stripe correspondant
+n'est pas inspectable : le CLI et la clé secrète ne sont pas sur le même
+compte.
+
+**Jeu d'essai conservé** pour ces vérifications : fiche « ESSAI-PAIEMENT »,
+commercial `essai-paiement@norya.invalid`, compte lié `acct_1UGBYyV05KrGGmso`.
+À supprimer ensuite. Un abonnement de test orphelin subsiste côté Stripe
+(`sub_1UGBh2…`, dont la fiche a été supprimée) : à annuler, sinon sa première
+échéance produira des livraisons en échec — ce qui est le comportement voulu,
+mais du bruit inutile.
 
 - [x] **Step 1: Poser les secrets**
 
@@ -2212,7 +2251,7 @@ supabase functions deploy connect-onboarding
 supabase functions deploy stripe-webhook --no-verify-jwt
 ```
 
-- [ ] **Step 3: Carte qui passe**
+- [x] **Step 3: Carte qui passe**
 
 Payer avec `4242 4242 4242 4242`, date future, CVC quelconque.
 Attendu : `paid_at` écrit, `payment_status = 'regle'`, une ligne
@@ -2237,7 +2276,7 @@ Attendu : `commission_transfers.status = 'en_attente_onboarding'`. Puis
 terminer l'onboarding et vérifier que le statut passe à `verse` sans
 intervention.
 
-- [ ] **Step 7: Rejeu**
+- [x] **Step 7: Rejeu**
 
 ```bash
 stripe events resend <evt_id_de_invoice.paid>
