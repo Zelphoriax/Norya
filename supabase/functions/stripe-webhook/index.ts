@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
   if (conflit) return new Response("Déjà traité", { status: 200 });
 
   try {
-    const ctx = { commercialOnboarde: await onboarde(sb, ev) };
+    const ctx = await contexte(sb, ev);
     const etat: Etat = { paiementId: null };
 
     for (const effet of effetsPour(ev as unknown as Evenement, ctx)) {
@@ -74,17 +74,50 @@ Deno.serve(async (req) => {
   }
 });
 
-/** Le commercial de cette vente peut-il déjà recevoir des virements ? */
+/**
+ * Résout la fiche et le commercial avant toute décision.
+ *
+ * Les métadonnées d'abord, à leurs deux emplacements : Stripe a déplacé
+ * `subscription_details` sous `parent` avec l'API 2025, et lire le seul
+ * ancien chemin a suffi à faire disparaître un encaissement sans un bruit.
+ * Puis, si elles manquent, le client Stripe — que la fiche porte déjà depuis
+ * create-checkout. Ce repli est l'important : une métadonnée est une
+ * commodité, le rattachement du client est un fait enregistré chez nous.
+ */
 // deno-lint-ignore no-explicit-any
-async function onboarde(sb: Base, ev: any): Promise<boolean> {
-  const id = ev.data?.object?.subscription_details?.metadata?.commercial_id;
-  if (!id) return false;
-  const { data } = await sb
-    .from("profiles")
-    .select("stripe_payouts_enabled")
-    .eq("id", id)
-    .maybeSingle();
-  return !!data?.stripe_payouts_enabled;
+async function contexte(sb: Base, ev: any) {
+  const o = ev.data?.object ?? {};
+  const meta = o.parent?.subscription_details?.metadata ??
+    o.subscription_details?.metadata ??
+    o.metadata ??
+    {};
+
+  let prospectId: string | null = meta.prospect_id ?? null;
+  let commercialId: string | null = meta.commercial_id || null;
+
+  if (!prospectId && typeof o.customer === "string") {
+    const { data } = await sb
+      .from("prospects")
+      .select("id, assigned_to")
+      .eq("stripe_customer_id", o.customer)
+      .maybeSingle();
+    if (data) {
+      prospectId = data.id;
+      commercialId = commercialId ?? data.assigned_to ?? null;
+    }
+  }
+
+  let commercialOnboarde = false;
+  if (commercialId) {
+    const { data } = await sb
+      .from("profiles")
+      .select("stripe_payouts_enabled")
+      .eq("id", commercialId)
+      .maybeSingle();
+    commercialOnboarde = !!data?.stripe_payouts_enabled;
+  }
+
+  return { commercialOnboarde, prospectId, commercialId };
 }
 
 async function appliquer(sb: Base, e: Effet, etat: Etat, eventId: string): Promise<void> {

@@ -1,12 +1,16 @@
-import { assertEquals } from "jsr:@std/assert@1";
+import { assertEquals, assertThrows } from "jsr:@std/assert@1";
 import { effetsPour } from "./effets.ts";
 
 /* Décision pure : aucun réseau, aucune base. On vérifie ce que le webhook
    DÉCIDE de faire, pas comment il le fait — c'est là que se joue le fait de
    ne jamais verser deux fois 320 €, ni d'en verser sur une maintenance. */
 
-const ONBOARDE = { commercialOnboarde: true };
-const NON_ONBOARDE = { commercialOnboarde: false };
+/* prospectId et commercialId sont résolus par index.ts avant la décision :
+   métadonnées aux deux emplacements connus, puis repli sur le client Stripe. */
+const ONBOARDE = { commercialOnboarde: true, prospectId: "pr_1", commercialId: "co_1" };
+const NON_ONBOARDE = { commercialOnboarde: false, prospectId: "pr_1", commercialId: "co_1" };
+const SANS_COMMERCIAL = { commercialOnboarde: true, prospectId: "pr_1", commercialId: null };
+const SANS_FICHE = { commercialOnboarde: true, prospectId: null, commercialId: null };
 
 const facture = (extra: Record<string, unknown> = {}) => ({
   type: "invoice.paid",
@@ -16,9 +20,6 @@ const facture = (extra: Record<string, unknown> = {}) => ({
       billing_reason: "subscription_create",
       amount_paid: 84_900, // 800 EUR de site + 49 EUR de premier mois
       payment_intent: "pi_1",
-      subscription_details: {
-        metadata: { prospect_id: "pr_1", commercial_id: "co_1" },
-      },
       ...extra,
     },
   },
@@ -93,11 +94,19 @@ Deno.test("première facture, commercial non vérifié : on met en file", () => 
 });
 
 Deno.test("vente sans commercial attribué : aucune commission", () => {
-  const e = effetsPour(
-    facture({ subscription_details: { metadata: { prospect_id: "pr_1" } } }),
-    ONBOARDE,
-  );
+  const e = effetsPour(facture(), SANS_COMMERCIAL);
   assertEquals(e.map((x) => x.type), ["enregistrer_paiement", "marquer_paye"]);
+});
+
+Deno.test("facture payée sans fiche identifiable : on lève, on n'avale pas", () => {
+  // Le silence est le pire comportement possible ici : c'est exactement ainsi
+  // qu'un encaissement de 800 € a disparu quand Stripe a déplacé les
+  // métadonnées sous parent.subscription_details.
+  assertThrows(
+    () => effetsPour(facture(), SANS_FICHE),
+    Error,
+    "sans fiche identifiable",
+  );
 });
 
 Deno.test("facture de maintenance : aucune commission", () => {

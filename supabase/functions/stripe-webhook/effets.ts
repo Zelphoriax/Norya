@@ -49,8 +49,21 @@ export type Effet =
   | { type: "maj_compte"; compteId: string; payoutsActifs: boolean }
   | { type: "rejouer_file"; compteId: string };
 
-/** Ce que la base sait déjà, et que l'événement ne dit pas. */
-export type Contexte = { commercialOnboarde: boolean };
+/**
+ * Ce que le serveur a résolu avant d'appeler la décision.
+ *
+ * `prospectId` et `commercialId` ne sont pas relus des métadonnées ici : leur
+ * emplacement a déjà changé une fois — Stripe a déplacé
+ * `invoice.subscription_details` sous `invoice.parent.subscription_details`
+ * avec l'API 2025 — et la conséquence fut un encaissement avalé en silence.
+ * La résolution, métadonnées puis repli sur le client Stripe, vit dans
+ * index.ts ; ici on ne fait que décider.
+ */
+export type Contexte = {
+  commercialOnboarde: boolean;
+  prospectId: string | null;
+  commercialId: string | null;
+};
 
 // deno-lint-ignore no-explicit-any
 type Objet = Record<string, any>;
@@ -71,9 +84,15 @@ export function effetsPour(ev: Evenement, ctx: Contexte): Effet[] {
       }];
 
     case "invoice.paid": {
-      const meta = o.subscription_details?.metadata ?? {};
-      const prospectId: string = meta.prospect_id;
-      const commercialId: string | null = meta.commercial_id || null;
+      const prospectId = ctx.prospectId;
+      const commercialId = ctx.commercialId;
+      // Sans fiche identifiée, on ne devine pas : on le fait savoir plutôt
+      // que d'enregistrer un encaissement orphelin.
+      if (!prospectId) {
+        throw new Error(
+          `Facture ${o.id} payée sans fiche identifiable — ni métadonnées, ni client connu.`,
+        );
+      }
       const premiere = o.billing_reason === "subscription_create";
 
       const effets: Effet[] = [{
@@ -107,9 +126,10 @@ export function effetsPour(ev: Evenement, ctx: Contexte): Effet[] {
     }
 
     case "invoice.payment_failed":
+      if (!ctx.prospectId) return [];
       return [{
         type: "marquer_statut",
-        prospectId: o.subscription_details?.metadata?.prospect_id,
+        prospectId: ctx.prospectId,
         statut: "echec",
       }];
 
