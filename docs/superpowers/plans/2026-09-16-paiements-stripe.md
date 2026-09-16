@@ -2223,26 +2223,24 @@ production que le propriétaire a explicitement exclue.
 
 ### Nettoyage effectué
 
-Le jeu d'essai est supprimé : plus aucun prospect, encaissement, commission ni
-compte de test en base. Seul le profil réel `zel.zx35@gmail.com` subsiste.
+**Base.** Plus aucun prospect, encaissement, commission ni compte de test.
+Seul le profil réel `zel.zx35@gmail.com` subsiste. Les trois lignes de
+`stripe_events` sont conservées volontairement : elles empêchent le
+retraitement d'événements dont la fiche n'existe plus.
 
-Les trois lignes de `stripe_events` sont **conservées volontairement** : elles
-empêchent le retraitement d'événements de test dont la fiche n'existe plus, qui
-lèverait désormais — comportement voulu, mais bruit inutile.
+**Stripe.** Le sandbox `Nova` (`acct_1UCXa9V05KpDxKCv`), celui de la clé
+secrète, est vide : 0 client, 0 abonnement, 0 compte connecté. Dix objets
+supprimés — deux abonnements annulés, huit clients, trois comptes Connect —
+chacun sous double garde : `livemode` faux **et** marque `@norya.invalid`.
 
-Restent à annuler côté Stripe, en mode test, faute d'accès à ce compte :
+Les deux prix `norya_site_v1` (80 000) et `norya_maintenance_v1` (4 900) sont
+**conservés** : ce n'est pas du déchet de test mais la configuration que
+`_shared/prix.ts` résout par clé de recherche.
 
-```
-sub_1UGBh2V05KpDxKCv…        abonnement du premier essai
-sub_1UGC4GV05KpDxKCv5wnO18SA  abonnement du second essai
-acct_1UGBYyV05KrGGmso         compte Connect du commercial d'essai
-acct_1UGBTUV05KnvYq7a         compte Connect créé pendant un diagnostic
-acct_1UGBXLV05KJO63rW         idem
-cus_VGidOcMwlZ2JXd            client d'un diagnostic interrompu
-```
-
-Pour refaire un jeu d'essai en une commande :
-`node scratchpad/fixture.mjs`
+**Contexte du CLI Stripe** laissé sur `acct_1UCXa9V05KpDxKCv`, le compte de la
+clé déployée, plutôt que sur l'autre sandbox où il était : c'est celui qu'il
+faut pour observer ce que font les fonctions. Retour en arrière par
+`stripe switch context acct_1UCXaLV05C1skoFg`.
 
 - [x] **Step 1: Poser les secrets**
 
