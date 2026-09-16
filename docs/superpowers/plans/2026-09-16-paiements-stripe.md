@@ -1403,7 +1403,7 @@ déclencher un vrai paiement.
   `store.caAnnuel() -> Promise<{annee, ca_cents, seuil_franchise_cents, seuil_tolerance_cents, ca_base, regle_confirmee}|null>`.
   Consommés par les tâches 10, 12, 13, 14.
 
-- [ ] **Step 1: Écrire le test de la garde**
+- [x] **Step 1: Écrire le test de la garde**
 
 `scratchpad/test-garde-demo.mjs` :
 
@@ -1443,7 +1443,7 @@ await import("node:fs").then((fs) =>
 await nav.close();
 ```
 
-- [ ] **Step 2: Lancer le test, vérifier qu'il échoue**
+- [x] **Step 2: Lancer le test, vérifier qu'il échoue**
 
 ```bash
 cd scratchpad && npm init -y && npm install puppeteer-core && cd ..
@@ -1453,7 +1453,7 @@ node scratchpad/test-garde-demo.mjs
 Expected: `retour createCheckout` signale `store.createCheckout is not a
 function` — la méthode n'existe pas encore.
 
-- [ ] **Step 3: Ajouter les trois méthodes réelles au store**
+- [x] **Step 3: Ajouter les trois méthodes réelles au store**
 
 Dans `index.html`, juste après `async commissions(){ … }` de l'objet `store`
 (vers la ligne 2450), insérer :
@@ -1490,7 +1490,7 @@ Dans `index.html`, juste après `async commissions(){ … }` de l'objet `store`
   },
 ```
 
-- [ ] **Step 4: Ajouter les versions de démonstration**
+- [x] **Step 4: Ajouter les versions de démonstration**
 
 Dans `demoStore`, juste après `async commissions(){ return []; }`
 (vers la ligne 2862), insérer :
@@ -1513,7 +1513,7 @@ Dans `demoStore`, juste après `async commissions(){ return []; }`
   },
 ```
 
-- [ ] **Step 5: Contrôler la syntaxe puis relancer le test**
+- [x] **Step 5: Contrôler la syntaxe puis relancer le test**
 
 ```bash
 node scratchpad/verif-syntaxe.mjs   # extrait les <script>, node --check chacun
@@ -1524,7 +1524,7 @@ Expected: `appels reseau : 0`, `erreurs de page : 0`, et `createCheckout`
 renvoie `ok:false` avec « désactivés dans le profil d'essai ». Zéro appel
 réseau est l'assertion qui compte.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add index.html
@@ -1546,7 +1546,7 @@ de réglage a posteriori pour les ventes Stripe.
 - Consumes: `store.createCheckout` (Task 9), `nextBilling` (index.html:6139).
 - Produces: `encaisserForm(id)`, appelée depuis la fiche prospect.
 
-- [ ] **Step 1: Écrire le test de la modale**
+- [x] **Step 1: Écrire le test de la modale**
 
 `scratchpad/test-encaisser.mjs` — charge la page, ouvre `encaisserForm("p1")`,
 et vérifie trois choses : la modale s'affiche, le bouton n'est jamais
@@ -1569,7 +1569,7 @@ const etat = await page.evaluate(() => {
 Assertions : `visible === true`, `disabled === false`, `texte` contient
 `800` et `49`.
 
-- [ ] **Step 2: Lancer, vérifier l'échec**
+- [x] **Step 2: Lancer, vérifier l'échec**
 
 ```bash
 node scratchpad/test-encaisser.mjs
@@ -1577,7 +1577,7 @@ node scratchpad/test-encaisser.mjs
 
 Expected: `encaisserForm is not defined`.
 
-- [ ] **Step 3: Remplacer billingForm par encaisserForm**
+- [x] **Step 3: Remplacer billingForm par encaisserForm**
 
 Dans `index.html`, remplacer tout le corps de `billingForm(id)` par :
 
@@ -1635,7 +1635,7 @@ function encaisserForm(id){
 }
 ```
 
-- [ ] **Step 4: Rebrancher l'appelant**
+- [x] **Step 4: Rebrancher l'appelant**
 
 `index.html:6754` appelle encore `billingForm`. Remplacer :
 
@@ -1649,7 +1649,7 @@ par :
     el.onclick = e => { e.stopPropagation(); encaisserForm(el.dataset.billing); });
 ```
 
-- [ ] **Step 5: Retirer la consigne devenue fausse**
+- [x] **Step 5: Retirer la consigne devenue fausse**
 
 Dans `closeSaleForm()`, la ligne
 `Ne confirmez une vente que si le client a effectué le paiement.` n'a plus
@@ -1661,7 +1661,7 @@ La remplacer par :
         L'encaissement se fait à l'étape suivante, depuis la fiche.</div>
 ```
 
-- [ ] **Step 6: Contrôler la syntaxe et relancer le test**
+- [x] **Step 6: Contrôler la syntaxe et relancer le test**
 
 ```bash
 node scratchpad/verif-syntaxe.mjs && node scratchpad/test-encaisser.mjs
@@ -1669,7 +1669,7 @@ node scratchpad/verif-syntaxe.mjs && node scratchpad/test-encaisser.mjs
 
 Expected: les trois assertions passent, zéro `pageerror`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add index.html
@@ -1689,7 +1689,7 @@ cinq jours ouvrés.
 **Interfaces:**
 - Consumes: `prospects.payment_status` (Task 2).
 
-- [ ] **Step 1: Écrire le test**
+- [x] **Step 1: Écrire le test**
 
 `scratchpad/test-pastilles.mjs` : pour chacun des cinq statuts, injecter la
 valeur sur un prospect de démonstration et lire l'étiquette rendue.
@@ -1711,12 +1711,12 @@ Attendu : `en_cours` → « Conclu · compensation en cours », `echec` →
 « Paiement refusé », `litige` → « Litige en cours », `regle` → « Conclu »,
 `aucun` → « Conclu · à encaisser ».
 
-- [ ] **Step 2: Lancer, vérifier l'échec**
+- [x] **Step 2: Lancer, vérifier l'échec**
 
 Expected: les cinq renvoient « Conclu · à encaisser » ou « Conclu » — la
 fonction ignore encore `payment_status`.
 
-- [ ] **Step 3: Étendre les deux fonctions**
+- [x] **Step 3: Étendre les deux fonctions**
 
 Remplacer les lignes 1840-1841 par :
 
@@ -1740,11 +1740,11 @@ L'ordre des tests compte : `paid_at` l'emporte sur `en_cours`, sinon une
 vente réglée resterait affichée « en compensation » si le statut n'avait pas
 été remis à jour.
 
-- [ ] **Step 4: Relancer le test**
+- [x] **Step 4: Relancer le test**
 
 Expected: les cinq libellés attendus, zéro `pageerror`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add index.html
@@ -1761,7 +1761,7 @@ git commit -m "feat: surface SEPA settlement, failure and dispute states"
 **Interfaces:**
 - Consumes: `store.connectOnboarding` (Task 9).
 
-- [ ] **Step 1: Écrire le test**
+- [x] **Step 1: Écrire le test**
 
 `scratchpad/test-inscription.mjs` :
 
@@ -1804,7 +1804,7 @@ fs.writeFileSync("scratchpad/resultat-inscription.txt", [
 await nav.close();
 ```
 
-- [ ] **Step 2: Lancer, vérifier l'échec**
+- [x] **Step 2: Lancer, vérifier l'échec**
 
 ```bash
 node scratchpad/test-inscription.mjs && cat scratchpad/resultat-inscription.txt
@@ -1813,7 +1813,7 @@ node scratchpad/test-inscription.mjs && cat scratchpad/resultat-inscription.txt
 Expected: `champ RIB present : true`, `bouton Connect present : false`,
 `etape validable : false` — les trois à l'inverse de l'attendu.
 
-- [ ] **Step 3: Remplacer le contenu de l'étape**
+- [x] **Step 3: Remplacer le contenu de l'étape**
 
 ```js
   if (key === "paiement") return `
@@ -1830,7 +1830,7 @@ Expected: `champ RIB present : true`, `bouton Connect present : false`,
       ${passwordStrengthHTML()}</div>`;
 ```
 
-- [ ] **Step 4: Remplacer le câblage du fichier RIB par celui du bouton**
+- [x] **Step 4: Remplacer le câblage du fichier RIB par celui du bouton**
 
 Aux lignes 3596-3603, le bloc qui câble le champ de fichier `su_rib` n'a plus
 de cible. Remplacer :
@@ -1869,7 +1869,7 @@ par :
 `collectSignupStep` (ligne 3611) ne lisait déjà que le mot de passe : rien à
 y changer.
 
-- [ ] **Step 5: Retirer le RIB de la validation**
+- [x] **Step 5: Retirer le RIB de la validation**
 
 Ligne 3618, remplacer :
 
@@ -1886,7 +1886,7 @@ par :
 L'onboarding Stripe ne conditionne pas la validation de l'étape : un
 commercial s'inscrit, vend, et sa commission attend sa vérification.
 
-- [ ] **Step 6: Contrôler la syntaxe et relancer le test**
+- [x] **Step 6: Contrôler la syntaxe et relancer le test**
 
 ```bash
 node scratchpad/verif-syntaxe.mjs
@@ -1896,7 +1896,7 @@ node scratchpad/test-inscription.mjs && cat scratchpad/resultat-inscription.txt
 Expected: `false / true / true / true` dans l'ordre du rapport, et zéro
 erreur de page.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add index.html
@@ -1915,7 +1915,7 @@ Un état, formulé à la deuxième personne. Jamais une erreur, jamais un blocag
 **Interfaces:**
 - Consumes: `profiles.stripe_account_id`, `profiles.stripe_payouts_enabled` (Task 2) ; `store.connectOnboarding` (Task 9).
 
-- [ ] **Step 1: Écrire le test**
+- [x] **Step 1: Écrire le test**
 
 `scratchpad/test-bandeau-stripe.mjs` :
 
@@ -1967,7 +1967,7 @@ Attendu : « aucun compte » mentionne « Vous n'avez pas encore connecté »,
 du tout, et `disabled` vaut `false` dans les deux premiers cas — l'état se
 dit avec des mots, jamais avec un bouton grisé.
 
-- [ ] **Step 2: Lancer, vérifier l'échec**
+- [x] **Step 2: Lancer, vérifier l'échec**
 
 ```bash
 node scratchpad/test-bandeau-stripe.mjs && cat scratchpad/resultat-bandeau.txt
@@ -1975,7 +1975,7 @@ node scratchpad/test-bandeau-stripe.mjs && cat scratchpad/resultat-bandeau.txt
 
 Expected: `bandeauStripe is not defined` dans les erreurs de page.
 
-- [ ] **Step 3: Ajouter le bandeau**
+- [x] **Step 3: Ajouter le bandeau**
 
 ```js
 /* État du compte de paiement du commercial. Trois états, aucun blocage :
@@ -2009,11 +2009,11 @@ Et le câblage, dans la fonction de rendu de la vue :
   };
 ```
 
-- [ ] **Step 4: Relancer le test**
+- [x] **Step 4: Relancer le test**
 
 Expected: les trois états rendent le bon texte, aucun bouton `disabled`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add index.html
@@ -2030,17 +2030,17 @@ git commit -m "feat: show Stripe account status to commercials as a state"
 **Interfaces:**
 - Consumes: `store.caAnnuel` (Task 9), vue `ca_annuel` (Task 3).
 
-- [ ] **Step 1: Écrire le test**
+- [x] **Step 1: Écrire le test**
 
 Trois scénarios de `ca_cents` — 10 %, 85 %, 105 % du seuil — et vérifier que
 l'alerte n'apparaît qu'à partir de 80 %, et que la mention « règle à
 confirmer » est présente tant que `regle_confirmee` est faux.
 
-- [ ] **Step 2: Lancer, vérifier l'échec**
+- [x] **Step 2: Lancer, vérifier l'échec**
 
 Expected: `carteCA is not defined`.
 
-- [ ] **Step 3: Ajouter la carte**
+- [x] **Step 3: Ajouter la carte**
 
 ```js
 /* CA encaissé de l'année face au seuil de franchise de TVA.
@@ -2074,12 +2074,12 @@ La dernière ligne est la réserve du propriétaire rendue visible : tant que
 `regle_confirmee` est faux, l'administrateur voit le chiffre **et** le fait
 qu'il repose sur une interprétation.
 
-- [ ] **Step 4: Relancer le test**
+- [x] **Step 4: Relancer le test**
 
 Expected: pas d'alerte à 10 %, alerte à 85 % et 105 %, mention de réserve
 présente dans les trois cas.
 
-- [ ] **Step 5: Ajouter le journal des transferts de commission**
+- [x] **Step 5: Ajouter le journal des transferts de commission**
 
 Dans `store` (réel), après `caAnnuel` :
 
@@ -2124,7 +2124,7 @@ function tableTransferts(lignes){
 Le `.tbl-wrap` est obligatoire : il porte l'`overflow-x:auto` qui laisse la
 table déborder dans son cadre scrollable au lieu de faire défiler la page.
 
-- [ ] **Step 6: Vérifier le rendu du journal**
+- [x] **Step 6: Vérifier le rendu du journal**
 
 Étendre `scratchpad/test-ca-admin.mjs` : appeler `tableTransferts` avec les
 trois statuts et vérifier que chaque ligne rend le libellé français attendu
@@ -2133,7 +2133,7 @@ et que le conteneur porte bien la classe `tbl-wrap`.
 Expected: « Versée », « En attente de vérification », « Échec », et
 `document.querySelector(".tbl-wrap")` non nul.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add index.html
