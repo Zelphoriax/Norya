@@ -2150,29 +2150,46 @@ Rien n'est irréversible ici : le mode test de Stripe ne déplace pas d'argent.
 
 ### Résultats au 16/09/2026
 
-**Vérifié.** Les trois fonctions sont déployées sur `olirdsbyvxjlysdylrmr` et
-répondent correctement : `10/10` sur trois passes consécutives — refus sans
-jeton, refus de la clé anonyme, refus du webhook sans signature et sur
-signature invalide, sans jamais réclamer de JWT à Stripe. Les échecs observés
-juste après un déploiement étaient de la propagation à froid, pas du code.
+**Fonctions vérifiées en réel, 17/17.** `create-checkout` rend une vraie URL
+`cs_test_…` — le préfixe confirme au passage que la clé posée est bien de
+test. La fiche passe à `en_cours` avec son jour de prélèvement et son client
+Stripe, `paid_at` reste vide. Les refus mordent : `409` sur une vente déjà
+encaissée, `403` sur une fiche attribuée à un autre, `422` sur un jour hors
+plage. `connect-onboarding` rend un lien réel et ne crée pas de second compte
+quand on le rappelle.
 
-Le site en ligne : `9/9`. Mode démonstration actif, interface à jour,
-garde d'essai tenue en ligne (zéro requête vers `/functions/v1/`), neuf vues
-sans débordement horizontal en 1440 px et cinq en 375 px, zéro erreur de page.
+**Points d'entrée déployés, 10/10** sur trois passes : refus sans jeton, refus
+de la clé anonyme, refus du webhook sans signature et sur signature invalide.
 
-Signature, effet et idempotence du webhook : `6/6` contre la vraie base, à la
-tâche 8. Base laissée à zéro ligne sur les cinq tables concernées.
+**Site en ligne, 9/9** : mode démonstration actif, garde d'essai tenue, neuf
+vues sans débordement en 1440 px et cinq en 375 px, zéro erreur de page.
 
-**Bloqué, et par quoi.** Les étapes 3 à 6 et 8 exigent deux choses que
-l'agent ne fournit pas : `STRIPE_SECRET_KEY` dans les secrets Supabase, et
-la saisie d'un numéro de carte ou d'un IBAN dans le formulaire Stripe. Trois
-valeurs sur cinq sont déjà posées (`NORYA_URL`, `PRICE_SITE`,
-`PRICE_MAINTENANCE`) ; il reste la clé secrète et le secret de webhook, à
-poser par le propriétaire du compte. Tant qu'ils manquent, `create-checkout`
-et `connect-onboarding` répondent `503` avec le motif, ce qui est le
-comportement voulu et non une panne.
+**Webhook, 6/6** contre la vraie base (tâche 8) : signature, effet, idempotence.
 
-- [ ] **Step 1: Poser les secrets**
+### Trois obstacles rencontrés, et ce qu'ils ont changé
+
+**Accounts v1 refusé.** Stripe ne crée plus de compte Connect en v1 pour une
+intégration neuve. Migration en v2, configuration `recipient` seule, frais et
+pertes à la charge de la plateforme. SDK porté en 22.6.2.
+
+**`No such price`.** La clé secrète et les prix vivaient dans deux comptes
+Stripe distincts. Les identifiants de prix ont disparu des secrets : ils se
+résolvent désormais par clé de recherche dans le compte de la clé, ce qui rend
+le décalage impossible au lieu de rare.
+
+**`proration_behavior` refusé.** Stripe l'interdit dès qu'une session porte un
+prix ponctuel. Remplaé par `trial_end` jusqu'au jour choisi, ce qui donne
+exactement ce que la modale promet plutôt qu'un prorata non annoncé.
+
+### Ce qui reste, et pourquoi
+
+Les étapes 3 à 8 demandent une transaction réelle : saisir une carte ou un
+IBAN dans le formulaire Stripe, ce que l'agent ne fait pas. Un jeu d'essai
+durable est en place pour cela — fiche « ESSAI-PAIEMENT », commercial
+`essai-paiement@norya.invalid`, compte lié `acct_1UGBYyV05KrGGmso` — avec une
+URL de paiement prête à cliquer. À supprimer une fois la vérification faite.
+
+- [x] **Step 1: Poser les secrets**
 
 Trois valeurs sur cinq sont posées. Les deux restantes sont à fournir par le
 propriétaire du compte Stripe :
