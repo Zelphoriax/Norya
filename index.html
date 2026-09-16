@@ -2454,6 +2454,43 @@ const store = {
     if (error) throw error; return data;
   },
 
+  /* --- Paiements Stripe ---
+     Le navigateur ne connaît ni montant ni clé : il demande une URL de
+     paiement et y redirige. Tout est décidé côté Edge Function, et c'est
+     le webhook — jamais cette page — qui déclare une vente encaissée. */
+  async _invoke(nom, corps){
+    const { data: { session } } = await sb.auth.getSession();
+    const r = await fetch(`${CONFIG.url}/functions/v1/${nom}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${session?.access_token ?? ""}`
+      },
+      body: JSON.stringify(corps || {})
+    });
+    const out = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(out.error || "Le service de paiement n'a pas répondu.");
+    return out;
+  },
+  async createCheckout(prospectId, billingDay){
+    return this._invoke("create-checkout",
+      { prospect_id: prospectId, billing_day: billingDay });
+  },
+  async connectOnboarding(){
+    return this._invoke("connect-onboarding");
+  },
+  async caAnnuel(){
+    const { data, error } = await sb.from("ca_annuel")
+      .select("*").eq("annee", new Date().getFullYear()).maybeSingle();
+    if (error) throw error; return data;
+  },
+  async transferts(){
+    const { data, error } = await sb.from("commission_transfers")
+      .select("*, profiles(full_name)")
+      .order("created_at", { ascending:false }).limit(100);
+    if (error) throw error; return data;
+  },
+
   async goals(){
     const { data, error } = await sb.from("goals").select("*").order("month",{ascending:false});
     if (error) throw error; return data;
@@ -2865,6 +2902,23 @@ const demoStore = {
   async activities(id){ return this._activities[id] || []; },
   async addNote(id, content){ this._log(id, "note", null, null, content); },
   async commissions(){ return []; },
+
+  /* En démonstration, aucun appel réseau : un profil d'essai ne doit
+     jamais pouvoir déclencher un paiement réel. La garde est ici, dans
+     la couche de données, et non dans un bouton qu'on pourrait oublier. */
+  async createCheckout(){
+    throw new Error("Les paiements sont désactivés dans le profil d'essai.");
+  },
+  async connectOnboarding(){
+    throw new Error("Les paiements sont désactivés dans le profil d'essai.");
+  },
+  async caAnnuel(){
+    const ca = this._prospects.filter(p => p.paid_at).length * SITE_PRICE * 100;
+    return { annee: new Date().getFullYear(), ca_cents: ca,
+             seuil_franchise_cents: 3750000, seuil_tolerance_cents: 4125000,
+             ca_base: "brut_encaisse", regle_confirmee: false };
+  },
+  async transferts(){ return []; },
 
   _goals: (() => {
     const m = n => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth()+n);
