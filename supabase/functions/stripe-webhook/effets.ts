@@ -42,6 +42,10 @@ export type Effet =
     montantCents: number;
   }
   | { type: "marquer_statut"; prospectId: string; statut: string }
+  // Un litige ne nomme pas le prospect : les métadonnées vivent sur la session
+  // et l'abonnement, jamais sur la charge. On passe par le payment_intent, que
+  // la table payments garde, et l'application remonte jusqu'à la fiche.
+  | { type: "marquer_litige"; paymentIntentId: string }
   | { type: "maj_compte"; compteId: string; payoutsActifs: boolean }
   | { type: "rejouer_file"; compteId: string };
 
@@ -111,9 +115,8 @@ export function effetsPour(ev: Evenement, ctx: Contexte): Effet[] {
 
     case "charge.dispute.created":
       return [{
-        type: "marquer_statut",
-        prospectId: o.metadata?.prospect_id,
-        statut: "litige",
+        type: "marquer_litige",
+        paymentIntentId: o.payment_intent,
       }];
 
     case "account.updated": {

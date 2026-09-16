@@ -131,13 +131,16 @@ Deno.test("échec de paiement", () => {
   );
 });
 
-Deno.test("litige", () => {
+Deno.test("litige : identifié par le payment_intent, pas par les métadonnées", () => {
+  // Une charge ne porte pas prospect_id : les métadonnées sont posées sur la
+  // session et l'abonnement. Lire o.metadata ici aurait toujours donné vide,
+  // et le litige serait passé inaperçu.
   assertEquals(
     effetsPour({
       type: "charge.dispute.created",
-      data: { object: { metadata: { prospect_id: "pr_1" } } },
+      data: { object: { id: "dp_1", charge: "ch_1", payment_intent: "pi_1" } },
     }, ONBOARDE),
-    [{ type: "marquer_statut", prospectId: "pr_1", statut: "litige" }],
+    [{ type: "marquer_litige", paymentIntentId: "pi_1" }],
   );
 });
 
