@@ -117,7 +117,11 @@ Deno.serve(async (req) => {
         // en une seule opération.
         { price: idSite, quantity: 1 },
       ],
-      payment_method_types: ["card", "sepa_debit"],
+      // Pas de payment_method_types figé : Stripe propose ce que le compte a
+      // activé. Coder la liste en dur faisait échouer tout le Checkout dès
+      // qu'un moyen n'était pas encore ouvert côté tableau de bord — ce qui
+      // s'est produit avec le prélèvement SEPA. Activer un moyen devient un
+      // réglage, plus un redéploiement.
       locale: "fr",
       subscription_data: {
         // Et non billing_cycle_anchor : Stripe refuse proration_behavior
