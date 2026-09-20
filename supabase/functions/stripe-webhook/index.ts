@@ -36,18 +36,8 @@ Deno.serve(async (req) => {
   if (!signature) return new Response("Signature absente", { status: 400 });
 
   const brut = await req.text();
-  let ev;
-  try {
-    // constructEventAsync et non constructEvent : la variante synchrone exige
-    // un crypto bloquant que Deno n'a pas.
-    ev = await stripe.webhooks.constructEventAsync(
-      brut,
-      signature,
-      Deno.env.get("STRIPE_WEBHOOK_SECRET") ?? "",
-    );
-  } catch (e) {
-    return new Response(`Signature invalide : ${(e as Error).message}`, { status: 400 });
-  }
+  const ev = await verifier(brut, signature);
+  if (!ev) return new Response("Signature invalide", { status: 400 });
 
   const sb = db();
 
@@ -74,6 +64,35 @@ Deno.serve(async (req) => {
     return new Response(`Échec du traitement : ${(e as Error).message}`, { status: 500 });
   }
 });
+
+/**
+ * Vérifie la signature contre chacun des secrets connus.
+ *
+ * `STRIPE_WEBHOOK_SECRET` accepte une liste séparée par des virgules, parce
+ * qu'un compte Stripe a besoin de deux points d'entrée distincts : l'un pour
+ * les événements de la plateforme — encaissements, factures, litiges — et
+ * l'autre pour ceux des comptes connectés, dont `account.updated`, celui qui
+ * libère une commission mise en file quand un commercial achève sa
+ * vérification. Chaque point d'entrée signe avec son propre secret, et
+ * n'en connaître qu'un rendait la seconde famille d'événements muette.
+ *
+ * constructEventAsync et non constructEvent : la variante synchrone exige un
+ * crypto bloquant que Deno n'a pas.
+ */
+async function verifier(brut: string, signature: string) {
+  const secrets = (Deno.env.get("STRIPE_WEBHOOK_SECRET") ?? "")
+    .split(",").map((s) => s.trim()).filter(Boolean);
+
+  for (const secret of secrets) {
+    try {
+      return await stripe.webhooks.constructEventAsync(brut, signature, secret);
+    } catch { /* secret suivant */ }
+  }
+  console.error(
+    `Aucun des ${secrets.length} secret(s) de signature ne correspond à cet appel.`,
+  );
+  return null;
+}
 
 /**
  * Résout la fiche et le commercial avant toute décision.
