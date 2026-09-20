@@ -1,27 +1,29 @@
 /**
- * Les deux `Price` Stripe de Norya, résolus par clé de recherche.
+ * Les `Price` Stripe de Norya, résolus par clé de recherche.
  *
- * Pourquoi pas deux identifiants dans les secrets : un `price_...` n'existe
- * que dans le compte Stripe où il a été créé. Coller à la main un identifiant
- * issu d'un compte et une clé secrète issue d'un autre donne un
- * « No such price » qui ne dit surtout pas que le problème est un compte
- * différent. L'erreur s'est produite ici même. Une clé de recherche, elle,
- * se résout dans le compte de la clé secrète, quel qu'il soit : le décalage
- * devient impossible plutôt que simplement rare.
+ * Pourquoi pas des identifiants dans les secrets : un `price_...` n'existe que
+ * dans le compte Stripe où il a été créé. Coller à la main un identifiant issu
+ * d'un compte et une clé secrète issue d'un autre donne un « No such price »
+ * qui ne dit surtout pas que le problème est un compte différent. L'erreur
+ * s'est produite ici même. Une clé de recherche se résout dans le compte de la
+ * clé secrète, quel qu'il soit : le décalage devient impossible plutôt que
+ * rare — et avec trois paliers, il y aurait eu trois fois plus d'occasions de
+ * se tromper.
  *
- * Les montants viennent de config.ts, seule source de vérité — le webhook
- * comptabilise déjà la vente sur cette constante plutôt que sur le total
- * facturé.
+ * Les montants viennent de config.ts, seule source de vérité.
  */
 
 import { stripe } from "./stripe.ts";
-import { MONTANT_MAINTENANCE_CENTS, MONTANT_SITE_CENTS } from "./config.ts";
+import {
+  MONTANT_MAINTENANCE_CENTS,
+  PALIERS_SITE_CENTS,
+  palierValide,
+} from "./config.ts";
 
-const CLE_SITE = "norya_site_v1";
+const cleSite = (cents: number) => `norya_site_${cents}_v1`;
 const CLE_MAINTENANCE = "norya_maintenance_v1";
 
-type Prix = { site: string; maintenance: string };
-let cache: Prix | null = null;
+const cache = new Map<string, string>();
 
 async function resoudre(
   lookupKey: string,
@@ -29,6 +31,9 @@ async function resoudre(
   nom: string,
   mensuel: boolean,
 ): Promise<string> {
+  const connu = cache.get(lookupKey);
+  if (connu) return connu;
+
   const existants = await stripe.prices.list({
     lookup_keys: [lookupKey],
     active: true,
@@ -45,6 +50,7 @@ async function resoudre(
           `alors que le barème en attend ${montantCents}.`,
       );
     }
+    cache.set(lookupKey, trouve.id);
     return trouve.id;
   }
 
@@ -55,20 +61,31 @@ async function resoudre(
     ...(mensuel ? { recurring: { interval: "month" } } : {}),
     product_data: { name: nom },
   });
+  cache.set(lookupKey, cree.id);
   return cree.id;
 }
 
-/** Résout les deux prix, une seule fois par instance de fonction. */
-export async function prix(): Promise<Prix> {
-  if (cache) return cache;
-  cache = {
-    site: await resoudre(CLE_SITE, MONTANT_SITE_CENTS, "Site internet", false),
-    maintenance: await resoudre(
-      CLE_MAINTENANCE,
-      MONTANT_MAINTENANCE_CENTS,
-      "Maintenance Norya",
-      true,
-    ),
-  };
-  return cache;
+/** Prix du site pour un palier. Le palier doit avoir été validé en amont. */
+export function prixSite(montantCents: number): Promise<string> {
+  if (!palierValide(montantCents)) {
+    throw new Error(
+      `Montant ${montantCents} hors barème. Paliers : ${PALIERS_SITE_CENTS.join(", ")}.`,
+    );
+  }
+  return resoudre(
+    cleSite(montantCents),
+    montantCents,
+    `Site internet — ${montantCents / 100} €`,
+    false,
+  );
+}
+
+/** Prix de la maintenance mensuelle, identique pour tous les paliers. */
+export function prixMaintenance(): Promise<string> {
+  return resoudre(
+    CLE_MAINTENANCE,
+    MONTANT_MAINTENANCE_CENTS,
+    "Maintenance Norya",
+    true,
+  );
 }

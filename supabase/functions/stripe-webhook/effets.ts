@@ -10,7 +10,7 @@
  * L'application de ces effets vit dans index.ts.
  */
 
-import { COMMISSION_CENTS, MONTANT_SITE_CENTS } from "../_shared/config.ts";
+import { commissionCents } from "../_shared/config.ts";
 
 export type Effet =
   | {
@@ -63,6 +63,9 @@ export type Contexte = {
   commercialOnboarde: boolean;
   prospectId: string | null;
   commercialId: string | null;
+  /** Montant du site pour cette vente, lu sur la fiche. Les formules vont de
+   *  350 à 800 € : une constante ici facturerait tout le monde au même prix. */
+  montantSiteCents: number;
 };
 
 // deno-lint-ignore no-explicit-any
@@ -100,10 +103,10 @@ export function effetsPour(ev: Evenement, ctx: Contexte): Effet[] {
         prospectId,
         commercialId,
         nature: premiere ? "site" : "maintenance",
-        // Sur la première facture, amount_paid vaut 849 € : le site plus le
-        // premier mois. Enregistrer ce total comme prix du site fausserait
-        // le compteur de CA face au seuil de TVA. On prend la constante.
-        montantCents: premiere ? MONTANT_SITE_CENTS : o.amount_paid,
+        // Le site vaut ce que la formule retenue vaut, pas le total de la
+        // facture : celle-ci peut porter autre chose, et fausserait alors le
+        // compteur de CA face au seuil de TVA comme le calcul de commission.
+        montantCents: premiere ? ctx.montantSiteCents : o.amount_paid,
         invoiceId: o.id,
         paymentIntentId: o.payment_intent ?? null,
       }];
@@ -119,7 +122,8 @@ export function effetsPour(ev: Evenement, ctx: Contexte): Effet[] {
           type: ctx.commercialOnboarde ? "verser_commission" : "mettre_en_file",
           prospectId,
           commercialId,
-          montantCents: COMMISSION_CENTS,
+          // 40 % du palier : 140 € sur 350, 200 sur 500, 320 sur 800.
+          montantCents: commissionCents(ctx.montantSiteCents),
         });
       }
       return effets;

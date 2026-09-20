@@ -7,10 +7,11 @@ import { effetsPour } from "./effets.ts";
 
 /* prospectId et commercialId sont résolus par index.ts avant la décision :
    métadonnées aux deux emplacements connus, puis repli sur le client Stripe. */
-const ONBOARDE = { commercialOnboarde: true, prospectId: "pr_1", commercialId: "co_1" };
-const NON_ONBOARDE = { commercialOnboarde: false, prospectId: "pr_1", commercialId: "co_1" };
-const SANS_COMMERCIAL = { commercialOnboarde: true, prospectId: "pr_1", commercialId: null };
-const SANS_FICHE = { commercialOnboarde: true, prospectId: null, commercialId: null };
+const base = { prospectId: "pr_1", commercialId: "co_1", montantSiteCents: 80_000 };
+const ONBOARDE = { ...base, commercialOnboarde: true };
+const NON_ONBOARDE = { ...base, commercialOnboarde: false };
+const SANS_COMMERCIAL = { ...base, commercialOnboarde: true, commercialId: null };
+const SANS_FICHE = { ...base, commercialOnboarde: true, prospectId: null, commercialId: null };
 
 const facture = (extra: Record<string, unknown> = {}) => ({
   type: "invoice.paid",
@@ -70,12 +71,24 @@ Deno.test("première facture : encaissement, paid_at, commission", () => {
   });
 });
 
-Deno.test("le site vaut 800 EUR, pas le total de la facture", () => {
+Deno.test("le site vaut sa formule, pas le total de la facture", () => {
   // amount_paid vaut 849 EUR : le site plus le premier mois de maintenance.
   // L'enregistrer tel quel fausserait le compteur de CA et la commission.
   const e = effetsPour(facture(), ONBOARDE);
   const enregistrement = e[0] as { montantCents: number };
   assertEquals(enregistrement.montantCents, 80_000);
+});
+
+Deno.test("chaque formule porte sa propre commission", () => {
+  // 40 % du palier. Une commission fixe paierait 320 EUR sur une vente a 350.
+  const attendu = [[35_000, 14_000], [50_000, 20_000], [80_000, 32_000]];
+  for (const [site, commission] of attendu) {
+    const e = effetsPour(facture(), { ...ONBOARDE, montantSiteCents: site });
+    const paiement = e[0] as { montantCents: number };
+    const versement = e[2] as { montantCents: number };
+    assertEquals(paiement.montantCents, site, `encaissement pour ${site}`);
+    assertEquals(versement.montantCents, commission, `commission pour ${site}`);
+  }
 });
 
 Deno.test("première facture, commercial non vérifié : on met en file", () => {

@@ -1,20 +1,26 @@
 /**
  * Ouvre une session de paiement Stripe pour une vente.
  *
- * Une seule session encaisse les 800 € du site et arme les 49 €/mois de
- * maintenance : en mode `subscription`, un prix ponctuel placé dans
- * `line_items` est ajouté à la première facture. Le client règle et signe une
- * fois, en rendez-vous, et n'a plus rien à ressaisir ensuite.
+ * Une seule session encaisse le site — 350, 500 ou 800 € selon la formule — et
+ * arme les 49 €/mois de maintenance : en mode `subscription`, un prix ponctuel
+ * placé dans `line_items` est ajouté à la première facture. Le client règle et
+ * signe une fois, en rendez-vous, et n'a plus rien à ressaisir ensuite.
  *
- * Rien de ce que le navigateur envoie n'est cru sur parole : les montants
- * viennent des `Price` Stripe, et l'attribution de la fiche est revérifiée ici.
+ * Rien de ce que le navigateur envoie n'est cru sur parole : la formule est
+ * vérifiée contre le barème, les montants viennent des `Price` Stripe, et
+ * l'attribution de la fiche est revérifiée ici.
  */
 
 import { stripe, stripeConfigure, STRIPE_ABSENT } from "../_shared/stripe.ts";
 import { db } from "../_shared/db.ts";
 import { reponse, CORS } from "../_shared/cors.ts";
 import { ancreFacturation } from "../_shared/ancre.ts";
-import { prix } from "../_shared/prix.ts";
+import { prixMaintenance, prixSite } from "../_shared/prix.ts";
+import {
+  MONTANT_MAINTENANCE_CENTS,
+  PALIERS_SITE_CENTS,
+  palierValide,
+} from "../_shared/config.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
@@ -27,14 +33,22 @@ Deno.serve(async (req) => {
   const { data: { user }, error: errAuth } = await sb.auth.getUser(jeton);
   if (errAuth || !user) return reponse({ error: "Session invalide." }, 401);
 
-  let corps: { prospect_id?: string; billing_day?: number };
+  let corps: { prospect_id?: string; billing_day?: number; montant_cents?: number };
   try {
     corps = await req.json();
   } catch {
     return reponse({ error: "Requête illisible." }, 400);
   }
-  const { prospect_id, billing_day } = corps;
+  const { prospect_id, billing_day, montant_cents } = corps;
   if (!prospect_id) return reponse({ error: "Fiche non précisée." }, 422);
+
+  // Le palier vient du navigateur, donc il se vérifie ici. Sans ce contrôle,
+  // n'importe qui pourrait s'acheter un site à un centime.
+  if (!palierValide(montant_cents)) {
+    return reponse({
+      error: `Formule inconnue. Les formules sont : ${PALIERS_SITE_CENTS.map((c) => c / 100 + " €").join(", ")}.`,
+    }, 422);
+  }
 
   // Un secret oublié doit se dire, pas se manifester par une panne.
   if (!stripeConfigure) return reponse({ error: STRIPE_ABSENT }, 503);
@@ -88,17 +102,20 @@ Deno.serve(async (req) => {
 
     // Résolus par clé de recherche dans le compte de la clé secrète, jamais
     // recopiés d'un compte à l'autre.
-    const tarifs = await prix();
+    const [idMaintenance, idSite] = await Promise.all([
+      prixMaintenance(),
+      prixSite(montant_cents),
+    ]);
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       customer: clientId,
       line_items: [
-        { price: tarifs.maintenance, quantity: 1 },
+        { price: idMaintenance, quantity: 1 },
         // Prix ponctuel : en mode subscription il n'apparaît que sur la
         // première facture, ce qui encaisse le site et arme la maintenance
         // en une seule opération.
-        { price: tarifs.site, quantity: 1 },
+        { price: idSite, quantity: 1 },
       ],
       payment_method_types: ["card", "sepa_debit"],
       locale: "fr",
@@ -107,8 +124,8 @@ Deno.serve(async (req) => {
         // « none » dès qu'une session contient un prix ponctuel, et sans lui
         // le client se verrait facturer en plus un prorata de maintenance
         // jusqu'à l'ancre — ce que la modale ne lui annonce pas. Une période
-        // d'essai jusqu'au jour choisi donne le comportement promis : 800 €
-        // aujourd'hui, puis 49 € le jour dit, et tous les mois à cette date.
+        // d'essai jusqu'au jour choisi donne le comportement promis : le prix
+        // du site aujourd'hui, puis 49 € le jour dit, et tous les mois ensuite.
         trial_end: ancre,
         metadata: meta,
       },
@@ -121,7 +138,12 @@ Deno.serve(async (req) => {
     // et c'est le webhook qui tranchera.
     await sb
       .from("prospects")
-      .update({ payment_status: "en_cours", billing_day: Number(billing_day) })
+      .update({
+        payment_status: "en_cours",
+        billing_day: Number(billing_day),
+        sale_amount: montant_cents / 100,
+        recurring_amount: MONTANT_MAINTENANCE_CENTS / 100,
+      })
       .eq("id", fiche.id);
 
     return reponse({ url: session.url });

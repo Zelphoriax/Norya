@@ -24,6 +24,7 @@
 import { stripe } from "../_shared/stripe.ts";
 import { db } from "../_shared/db.ts";
 import { effetsPour, type Effet, type Evenement } from "./effets.ts";
+import { MONTANT_SITE_DEFAUT_CENTS } from "../_shared/config.ts";
 
 type Base = ReturnType<typeof db>;
 
@@ -107,6 +108,19 @@ async function contexte(sb: Base, ev: any) {
     }
   }
 
+  // La formule retenue, telle que create-checkout l'a inscrite sur la fiche.
+  // C'est elle qui fixe l'encaissement et la commission, pas la facture.
+  let montantSiteCents = MONTANT_SITE_DEFAUT_CENTS;
+  if (prospectId) {
+    const { data } = await sb
+      .from("prospects")
+      .select("sale_amount, assigned_to")
+      .eq("id", prospectId)
+      .maybeSingle();
+    if (data?.sale_amount) montantSiteCents = Math.round(Number(data.sale_amount) * 100);
+    commercialId = commercialId ?? data?.assigned_to ?? null;
+  }
+
   let commercialOnboarde = false;
   if (commercialId) {
     const { data } = await sb
@@ -117,7 +131,7 @@ async function contexte(sb: Base, ev: any) {
     commercialOnboarde = !!data?.stripe_payouts_enabled;
   }
 
-  return { commercialOnboarde, prospectId, commercialId };
+  return { commercialOnboarde, prospectId, commercialId, montantSiteCents };
 }
 
 async function appliquer(sb: Base, e: Effet, etat: Etat, eventId: string): Promise<void> {

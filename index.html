@@ -1202,6 +1202,22 @@ select.pill option{background:#121613;color:var(--text)}
 .alert.ok{background:var(--accent-soft);color:var(--accent);border-color:var(--accent-dim)}
 /* Un refus de paiement doit se lire comme un refus, pas comme un avertissement. */
 .alert.err{background:var(--red-soft);color:var(--red);border-color:rgba(242,96,92,.28)}
+
+/* Choix de la formule. Trois cartes côte à côte, une seule retenue — le prix
+   se lit d'un coup d'œil, sans dérouler une liste devant le client. */
+.paliers{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:6px}
+.palier{
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  padding:14px 8px;border-radius:var(--r-md);cursor:pointer;font:inherit;
+  background:var(--surface-2);border:1px solid var(--line);color:var(--text);
+  transition:border-color .15s ease,background .15s ease;
+}
+.palier:hover{border-color:var(--accent-dim)}
+.palier.on{border-color:var(--accent);background:var(--accent-soft)}
+.palier .p-prix{font-size:19px;font-weight:600;letter-spacing:-.01em}
+.palier.on .p-prix{color:var(--accent)}
+.palier .p-sous{font-size:11.5px;color:var(--muted)}
+@media(max-width:520px){.paliers{grid-template-columns:1fr}}
 .alert b{font-weight:600}
 
 .icon-btn{
@@ -1869,6 +1885,9 @@ const STATUS_COLOR = {
 
 /* Barème Norya : chaque vente terrain est facturée au même prix. */
 const SITE_PRICE = 800;
+/* Les trois formules proposées au client. La maintenance vaut 49 € par mois
+   quelle que soit la formule : c'est le site qui varie, pas le suivi. */
+const PALIERS = [350, 500, 800];
 const COMMERCIAL_RATE = 40;
 const COMMERCIAL_COMMISSION = 320;
 const NOVA_SHARE = 480;
@@ -2369,7 +2388,15 @@ function applyTheme(key){
 
 /* La maintenance est conservée intégralement par Norya. */
 const MAINTENANCE_FEE = 49;
-const commissionOf = p => p?.status === "conclu" ? COMMERCIAL_COMMISSION : 0;
+/* La commission suit le montant réellement vendu : 140 € sur une formule à
+   350, 200 sur 500, 320 sur 800. Un montant fixe paierait 320 € sur une vente
+   qui n'en a rapporté que 350. Le taux gelé sur la fiche l'emporte, pour qu'un
+   changement de barème ne réécrive pas les ventes passées. */
+const commissionOf = p => {
+  if (p?.status !== "conclu") return 0;
+  const taux = Number(p.commission_rate_snapshot ?? COMMERCIAL_RATE);
+  return Math.round(Number(p.sale_amount || 0) * taux / 100);
+};
 const cityKey = city => String(city || "").trim().toLocaleLowerCase("fr-FR");
 
 /* =========================================================
@@ -2492,9 +2519,9 @@ const store = {
     if (!r.ok) throw new Error(out.error || "Le service de paiement n'a pas répondu.");
     return out;
   },
-  async createCheckout(prospectId, billingDay){
+  async createCheckout(prospectId, billingDay, montantCents){
     return this._invoke("create-checkout",
-      { prospect_id: prospectId, billing_day: billingDay });
+      { prospect_id: prospectId, billing_day: billingDay, montant_cents: montantCents });
   },
   async connectOnboarding(){
     return this._invoke("connect-onboarding");
@@ -6377,8 +6404,11 @@ function viewClients(){
           <td class="num"><b>${eur(p.sale_amount)}</b></td>
           <td>${p.paid_at
             ? `<span class="pill conclu">Encaissé</span>`
-            : isAdmin()
-              ? `<button class="ihb ihb-ghost ihb-mini" data-pay="${p.id}"><span class="ihb-label">Confirmer</span><span class="ihb-fly"><span>Confirmer</span><svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span><span class="ihb-dot" aria-hidden="true"></span></button>`
+            : (isAdmin() || p.assigned_to === viewer().id)
+              ? `<button class="ihb ihb-mini" data-encaisser="${p.id}"><span class="ihb-label">Paiement</span><span class="ihb-fly"><span>Paiement</span><svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span><span class="ihb-dot" aria-hidden="true"></span></button>${
+                  isAdmin()
+                    ? `<button class="ihb ihb-ghost ihb-mini" data-pay="${p.id}" style="margin-left:6px"><span class="ihb-label">Reçu hors Stripe</span><span class="ihb-fly"><span>Reçu hors Stripe</span><svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span><span class="ihb-dot" aria-hidden="true"></span></button>`
+                    : ""}`
               : `<span class="pill attente">En attente</span>`}</td>
           <td class="opt-lg">${sub
             ? `<span class="pill conclu">${eur(MAINTENANCE_FEE)}/mois</span>`
@@ -6954,6 +6984,8 @@ function wire(){
 
   document.querySelectorAll("[data-billing]").forEach(el =>
     el.onclick = e => { e.stopPropagation(); encaisserForm(el.dataset.billing); });
+  document.querySelectorAll("[data-encaisser]").forEach(el =>
+    el.onclick = e => { e.stopPropagation(); encaisserForm(el.dataset.encaisser); });
 
   /* ----- Profil ----- */
   const pick = $("#pickPhoto");
@@ -7818,13 +7850,25 @@ function encaisserForm(id){
   const p = findProspect(id);
   if (!p) { toast("Fiche introuvable.", "err"); return; }
   const days = Array.from({length:28}, (_,i) => i+1);
+  /* On repart de la formule déjà retenue si la fiche en porte une, sinon de
+     la plus complète : mieux vaut que le commercial décide de descendre que
+     d'oublier de monter. */
+  let choix = PALIERS.includes(Number(p.sale_amount)) ? Number(p.sale_amount) : 800;
   const m = modal({
-    title: "Encaisser — " + p.company_name,
+    title: "Paiement — " + p.company_name,
     body: `
+      <div class="field"><label>Formule</label>
+        <div class="paliers" id="b_paliers">
+          ${PALIERS.map(m => `
+            <button type="button" class="palier ${m === choix ? "on" : ""}" data-palier="${m}">
+              <span class="p-prix">${eur(m)}</span>
+              <span class="p-sous">+ ${eur(MAINTENANCE_FEE)}/mois</span>
+            </button>`).join("")}
+        </div></div>
       <p style="margin:0 0 16px;color:var(--muted);font-size:13px">
-        Le client règle ${eur(SITE_PRICE)} maintenant, par carte ou par prélèvement,
-        puis ${eur(MAINTENANCE_FEE)} le jour choisi de chaque mois. Le même moyen
-        de paiement sert pour les deux : il n'aura rien à ressaisir.</p>
+        Le client règle <b id="b_total">${eur(choix)}</b> maintenant, par carte ou par
+        prélèvement, puis ${eur(MAINTENANCE_FEE)} le jour choisi de chaque mois. Le
+        même moyen de paiement sert pour les deux : il n'aura rien à ressaisir.</p>
       <div class="field"><label for="b_day">Jour du prélèvement mensuel</label>
         <select class="select" id="b_day">
           ${days.map(d => `<option value="${d}" ${p.billing_day===d?"selected":""}>Le ${d} de chaque mois</option>`).join("")}
@@ -7841,10 +7885,18 @@ function encaisserForm(id){
   const sel = m.querySelector("#b_day");
   const note = m.querySelector("#b_next");
   const err  = m.querySelector("#b_err");
+  const total = m.querySelector("#b_total");
   const apercu = () => {
     note.textContent = "Première maintenance prélevée le " + nextBilling(Number(sel.value));
   };
   sel.onchange = apercu; apercu();
+
+  m.querySelectorAll("[data-palier]").forEach(b => b.onclick = () => {
+    choix = Number(b.dataset.palier);
+    m.querySelectorAll("[data-palier]").forEach(x => x.classList.toggle("on", x === b));
+    total.textContent = eur(choix);
+    err.style.display = "none";
+  });
 
   m.querySelector("#cancel").onclick = closeModal;
 
@@ -7855,7 +7907,7 @@ function encaisserForm(id){
     err.style.display = "none";
     btnLabel(btn, "Ouverture…");
     try {
-      const { url } = await store.createCheckout(id, Number(sel.value));
+      const { url } = await store.createCheckout(id, Number(sel.value), choix * 100);
       window.location.href = url;
     } catch (e) {
       err.style.display = ""; err.textContent = e.message;

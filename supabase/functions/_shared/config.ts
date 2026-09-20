@@ -2,13 +2,34 @@
  * Barème Norya, côté serveur.
  *
  * Ces montants ne viennent jamais de la requête du navigateur : un client qui
- * choisirait lui-même le prix de son site, ou le montant de la commission,
- * n'aurait qu'à modifier le corps de l'appel. Ils sont fixés ici, et dans les
- * objets `Price` de Stripe — les deux doivent rester d'accord.
+ * choisirait lui-même le prix de son site n'aurait qu'à modifier le corps de
+ * l'appel. Le navigateur propose un palier ; le serveur vérifie qu'il fait
+ * partie de la liste, et c'est cette liste qui fait foi.
  *
  * En centimes entiers : jamais de flottant sur de l'argent.
  */
 
-export const MONTANT_SITE_CENTS = 80_000;
+/** Les trois formules de site. Tout autre montant est refusé. */
+export const PALIERS_SITE_CENTS = [35_000, 50_000, 80_000];
+
+/** Maintenance mensuelle, identique quel que soit le palier. */
 export const MONTANT_MAINTENANCE_CENTS = 4_900;
-export const COMMISSION_CENTS = 32_000;
+
+/** Part du commercial sur la vente du site, en pourcentage. */
+export const TAUX_COMMISSION = 40;
+
+/** Palier retenu par défaut, et pour les ventes antérieures aux paliers. */
+export const MONTANT_SITE_DEFAUT_CENTS = 80_000;
+
+export function palierValide(montantCents: unknown): montantCents is number {
+  return typeof montantCents === "number" &&
+    PALIERS_SITE_CENTS.includes(montantCents);
+}
+
+/**
+ * Commission due sur une vente. Elle suit le palier : 140 € sur 350,
+ * 200 € sur 500, 320 € sur 800. La maintenance ne commissionne pas.
+ */
+export function commissionCents(montantSiteCents: number): number {
+  return Math.round(montantSiteCents * TAUX_COMMISSION / 100);
+}
