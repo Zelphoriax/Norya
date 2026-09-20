@@ -33,3 +33,13 @@ export function palierValide(montantCents: unknown): montantCents is number {
 export function commissionCents(montantSiteCents: number): number {
   return Math.round(montantSiteCents * TAUX_COMMISSION / 100);
 }
+
+/**
+ * Mention obligatoire en franchise en base de TVA.
+ *
+ * Elle est posée sur le client Stripe (`invoice_settings.footer`), et non sur
+ * le compte : `settings.invoices.default_footer` n'existe pas — l'API accepte
+ * l'appel sans rien enregistrer, ce qui est pire qu'un refus. Le champ client
+ * s'applique à toutes ses factures, la première comme les mensualités.
+ */
+export const MENTION_TVA = "TVA non applicable, art. 293 B du CGI";

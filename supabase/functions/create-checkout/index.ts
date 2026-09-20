@@ -17,6 +17,7 @@ import { reponse, CORS } from "../_shared/cors.ts";
 import { ancreFacturation } from "../_shared/ancre.ts";
 import { prixMaintenance, prixSite } from "../_shared/prix.ts";
 import {
+  MENTION_TVA,
   MONTANT_MAINTENANCE_CENTS,
   PALIERS_SITE_CENTS,
   palierValide,
@@ -89,9 +90,16 @@ Deno.serve(async (req) => {
         email: fiche.email,
         name: fiche.company_name,
         metadata: { prospect_id: fiche.id },
+        invoice_settings: { footer: MENTION_TVA },
       });
       clientId = c.id;
       await sb.from("prospects").update({ stripe_customer_id: clientId }).eq("id", fiche.id);
+    } else {
+      // Un client créé avant cette mention doit la porter lui aussi : sans
+      // elle, la facture d'une entreprise en franchise n'est pas conforme.
+      await stripe.customers.update(clientId, {
+        invoice_settings: { footer: MENTION_TVA },
+      });
     }
 
     const racine = Deno.env.get("NORYA_URL") ?? "";

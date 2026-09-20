@@ -2325,37 +2325,43 @@ git commit --allow-empty -m "test: end-to-end payment flow verified in Stripe te
 Cette tâche documente la bascule, elle ne la fait pas. Aucune case ne doit
 être cochée par un agent : chacune engage de l'argent réel.
 
-### État constaté au 16/09/2026
+### État au 20/09/2026 — basculé en production
 
-| Point | État |
-|---|---|
-| Compte bancaire rattaché | **non** — pas encore de compte pro ouvert |
-| Connect activé | **à vérifier** — jamais appelé en réel faute de clé secrète |
-| Règle fiscale confirmée | **non** — `fiscal_config.regle_confirmee = false` |
-| Mention 293 B en pied de facture | **à vérifier** dans le tableau de bord |
-| Prix en mode live | **non** — seuls les prix de test existent |
-| Clés live posées | **non** — même les clés de test ne sont pas posées |
-| Webhook live enregistré | **non** |
-| `DEMO = false` | **non**, et c'est voulu |
-| Vente réelle vérifiée | **non** |
+```
+charges_enabled   : true        payouts_enabled : true
+details_submitted : true        encore requis   : rien
+card_payments     : active      sepa_debit      : active
+transfers         : active
+```
 
-Rien n'est prêt pour la production, et rien ne doit l'être tant que le compte
-bancaire n'existe pas : sans IBAN, Stripe encaisserait sans pouvoir reverser,
-et les commissions des commerciaux resteraient bloquées chez la plateforme.
+Compte live `acct_1UCXa9V05KpDxKCv`. Deux points d'entrée webhook en live —
+`we_1UHmCkV05KpDxKCvF359Ju30` pour la plateforme, `we_1UHmCmV05KpDxKCvkbM2TFnI`
+pour les comptes connectés. Quatre prix actifs : 35 000, 50 000, 80 000 et
+4 900 mensuel. `DEMO = false` dans l'arbre, dans `HEAD` et en ligne.
 
-- [ ] Un compte bancaire au nom de l'entreprise individuelle est rattaché à
+Site en production vérifié 16/16, bureau et mobile : écran de connexion réel,
+application masquée avant authentification, trois formules livrées, zéro
+erreur de page.
+
+La mention 293 B ne se pose pas sur le compte : `settings.invoices.default_footer`
+n'existe pas, et l'API accepte l'appel sans rien enregistrer — pire qu'un refus.
+Elle est donc posée par le code sur chaque client Stripe
+(`invoice_settings.footer`), ce qui couvre la première facture comme les
+mensualités.
+
+- [x] Un compte bancaire au nom de l'entreprise individuelle est rattaché à
       Stripe. Sans lui, Stripe encaisse mais retient les fonds.
-- [ ] Connect est activé sur le compte Stripe, avec les mentions légales de
+- [x] Connect est activé sur le compte Stripe, avec les mentions légales de
       la plateforme renseignées.
 - [ ] La règle fiscale (§7 de la spec) est confirmée, et
       `fiscal_config.regle_confirmee` passe à `true` — ou `ca_base` est
       corrigée s'il s'avère que la lecture retenue n'était pas la bonne.
-- [ ] Le pied de facture Stripe porte « TVA non applicable, art. 293 B du CGI ».
-- [ ] Les produits et prix sont recréés en mode live ; `PRICE_SITE` et
+- [x] Le pied de facture Stripe porte « TVA non applicable, art. 293 B du CGI ».
+- [x] Les produits et prix sont recréés en mode live ; `PRICE_SITE` et
       `PRICE_MAINTENANCE` pointent sur les identifiants live.
-- [ ] `STRIPE_SECRET_KEY` et `STRIPE_WEBHOOK_SECRET` sont les clés live.
-- [ ] Le point d'entrée webhook live est enregistré sur l'URL de production.
-- [ ] `DEMO` passe à `false` dans `index.html`, et le déploiement Cloudflare
+- [x] `STRIPE_SECRET_KEY` et `STRIPE_WEBHOOK_SECRET` sont les clés live.
+- [x] Le point d'entrée webhook live est enregistré sur l'URL de production.
+- [x] `DEMO` passe à `false` dans `index.html`, et le déploiement Cloudflare
       est refait.
 - [ ] Une vente réelle de bout en bout est faite et vérifiée, de préférence
       sur un client complice.
