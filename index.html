@@ -884,6 +884,7 @@ th.act-col,td.act-col{width:1%;white-space:nowrap;padding-right:14px}
 .file-drop span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (max-width:560px){
   #signupFlow{padding:12px}
+  .signup-box{margin:0 auto}
   .signup-box{padding:22px 18px 18px}
   .signup-box h1{margin-bottom:12px}
   .signup-steps{margin-bottom:14px}
@@ -4565,7 +4566,8 @@ const DEMO_CARDS = [
 ];
 const DEMO_CONTACTS = ["M. Lambert","Mme Chevalier","M. Ferrand","Mme Delaunay",
   "M. Bouchard","Mme Roussel","M. Vasseur","Mme Pichon","M. Da Silva","Mme Kacem"];
-const DEMO_AREA = { rennes:"02 99", paris:"01 45", lyon:"04 78" };
+const DEMO_AREA = { rennes:"02 99", paris:"01 45", lyon:"04 78" };
+
 
 /* Portefeuille d'un profil d'essai : un historique de ventes dans sa ville,
    plus quelques fiches en cours.
@@ -4971,7 +4973,7 @@ function renderSignupStep(){
     wireSignupFileInputs(SIGNUP_STEPS[signupStep].key);
     wirePasswordStrength();
     $("#signupBody [data-rgpd]")?.addEventListener("click", () => legalPage("confidentialite", true));
-    $("#signupSkip")?.addEventListener("click", () => {
+    onTap($("#signupSkip"), () => {
       collectSignupStep("statut");
       signupStep++; renderSignupStep();
     });
@@ -4996,16 +4998,48 @@ function closeSignupFlow(){
   $("#demoLogin").classList.remove("hidden");
 }
 
+/* Appui fiable sur Safari. Quand un champ est actif, le premier appui sur un
+   bouton ferme le clavier : la page se redimensionne entre le doigt posé et le
+   doigt levé, le bouton bouge, et Safari annule le « click » — d'où des boutons
+   qui semblent morts. On agit donc au relâchement du doigt (pointeur capturé sur
+   le bouton, donc insensible au décalage), et le « click » ne sert plus qu'à la
+   souris et au clavier. Rebrancher un même bouton remplace l'action, sans la doubler. */
+function onTap(el, fn){
+  if (!el) return;
+  el._tapFn = fn;
+  if (el._tapOk) return;
+  el._tapOk = true;
+  let down = null, vu = 0;
+  el.addEventListener("pointerdown", e => {
+    if (e.pointerType === "mouse") return;
+    down = { x:e.clientX, y:e.clientY };
+    try { el.setPointerCapture(e.pointerId); } catch { /* capture refusée : le relâchement suffit */ }
+  });
+  el.addEventListener("pointerup", e => {
+    if (!down) return;
+    const d = Math.hypot(e.clientX - down.x, e.clientY - down.y);
+    down = null;
+    if (d < 14){ vu = Date.now(); e.preventDefault(); el._tapFn(e); }
+  });
+  el.addEventListener("pointercancel", () => { down = null; });
+  el.addEventListener("click", e => {
+    if (Date.now() - vu < 800) return;   // déjà traité au relâchement
+    el._tapFn(e);
+  });
+}
+
 function wireSignupFlow(){
-  $("#openSignup").onclick = () => openSignupFlow("login");
-  $("#signupClose").onclick = closeSignupFlow;   // quitter à tout moment, sans blocage
-  $("#signupBack").onclick = () => {
+  onTap($("#openSignup"), () => openSignupFlow("login"));
+  onTap($("#signupClose"), closeSignupFlow);   // quitter à tout moment, sans blocage
+  onTap($("#signupBack"), () => {
     if (signupStep === 0) return;
     // On garde la saisie en cours : revenir en arrière ne doit rien effacer.
     collectSignupStep(SIGNUP_STEPS[signupStep].key);
     signupStep--; renderSignupStep();
-  };
-  $("#signupNext").onclick = async () => {
+  });
+  let envoiEnCours = false;
+  onTap($("#signupNext"), async () => {
+    if (envoiEnCours) return;
     if (signupStep >= SIGNUP_STEPS.length){ closeSignupFlow(); return; }   // « Retour à l'accueil »
     const key = SIGNUP_STEPS[signupStep].key;
     collectSignupStep(key);
@@ -5014,17 +5048,18 @@ function wireSignupFlow(){
     // pour ne jamais annoncer un dépôt qui n'a pas eu lieu.
     if (signupStep === SIGNUP_STEPS.length - 1){
       const b = $("#signupNext");
-      b.disabled = true; b.textContent = "Envoi…";
+      envoiEnCours = true; b.textContent = "Envoi…";
       try { await submitSignup(); }
       catch (e){
         toast("Le dossier n'a pas pu être déposé : " + e.message, "err");
-        b.disabled = false; b.textContent = "Terminer l'inscription";
+        b.textContent = "Terminer l'inscription";
+        envoiEnCours = false;
         return;
       }
-      b.disabled = false;
+      envoiEnCours = false;
     }
     signupStep++; renderSignupStep();
-  };
+  });
 }
 
 /* =========================================================
@@ -7377,7 +7412,7 @@ function etatPaiement(){
 function fichesAEncaisser(){
   const comm = etatPaiement().formule === "communication";
   return state.allProspects
-    .filter(p => (isAdmin() || p.assigned_to === viewer().id) && (comm
+    .filter(p => p.status !== "refuse" && (isAdmin() || p.assigned_to === viewer().id) && (comm
       /* La Communication se vend aussi aux clients qui ont déjà leur site :
          seuls ceux qui l'ont déjà en sont exclus. */
       ? p.communication !== "actif" && p.communication !== "en_cours"
@@ -7678,14 +7713,18 @@ function viewDashboard(){
      à chaque ligne, comme si un seul commercial occupait tout le fil. */
   const moi = viewer().id;
   const feed = [];
-  state.prospects.filter(p => p.status === "conclu" && p.closed_at).forEach(p => {
+  /* Un commercial ne voit que ce qui le concerne : ses ventes et les fiches
+     qu'il a reçues. Le travail des autres, et les fiches encore libres, ne
+     figurent que dans le fil de l'administrateur. */
+  const miens = state.prospects.filter(p => isAdmin() || p.assigned_to === moi);
+  miens.filter(p => p.status === "conclu" && p.closed_at).forEach(p => {
     const soi = p.assigned_to === moi;
     feed.push({ t:p.closed_at, kind:"vente",
                 who: soi ? "Vous" : nameOf(p.assigned_to),
                 title: soi ? "avez conclu la vente" : "a conclu la vente",
                 sub:p.company_name });
   });
-  state.prospects.forEach(p => {
+  miens.forEach(p => {
     const pour = p.assigned_to, auteur = p.created_by !== moi && nameOf(p.created_by);
     const title = !pour       ? (isAdmin() ? "à attribuer" : "à prendre dans votre ville")
                 : pour === moi ? (auteur ? "attribué par " + auteur : "dans votre portefeuille")
@@ -7826,30 +7865,12 @@ function viewDashboard(){
   </div>`;
 
   /* ---- Classement ----
-     Toujours sur l'ensemble de l'entreprise (state.allProspects) : un
-     classement d'équipe qui ne montrerait que sa propre ville n'aurait
-     aucun sens et ferait apparaître les autres commerciaux à zéro. */
-  const board = state.team.map(t => {
-    const sold = state.allProspects.filter(p =>
-      p.status === "conclu" && p.assigned_to === t.id && p.closed_at && monthKey(p.closed_at) === cur);
-    return { t, n: sold.length, ca: sold.reduce((a,p) => a + Number(p.sale_amount||0), 0) };
-  }).sort((a,b) => b.ca - a.ca);
-
+     Pas encore ouvert : la carte annonce « Bientôt disponible » et ne
+     calcule rien, pour ne montrer le travail de personne d'autre. */
   const classement = `
   <div class="card">
-    <div class="card-head"><h3>Top commerciaux</h3><span class="tag">Ce mois-ci</span></div>
-    <div class="board">
-      ${board.map((r,i) => `
-        <div class="board-row">
-          <span class="rank">${i+1}</span>
-          ${memberAvatar(r.t,"sm")}
-          <div class="board-body"><b>${esc(r.t.full_name||"—")}</b>
-            <small>${r.n} vente${r.n>1?"s":""}</small></div>
-          <b class="num" style="color:${r.ca?"var(--accent)":"var(--muted)"}">${eur(r.ca)}</b>
-        </div>`).join("")}
-    </div>
-    <button class="card-link" data-go="equipe">Voir les commissions
-      <svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></button>
+    <div class="card-head"><h3>Top commerciaux</h3><span class="tag">Bientôt</span></div>
+    <div class="empty" style="padding:34px"><p style="margin:0">Bientôt disponible</p></div>
   </div>`;
 
   /* Le portfolio se montre en rendez-vous : il doit se trouver sans
