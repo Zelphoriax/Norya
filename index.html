@@ -875,8 +875,9 @@ th.act-col,td.act-col{width:1%;white-space:nowrap;padding-right:14px}
 
 /* Inscription commerciale, étape par étape */
 .signup-box{position:relative;text-align:left;max-width:420px;margin:auto}
-#signupFlow{display:flex;overflow-y:auto;-webkit-overflow-scrolling:touch;
-  height:100vh;height:100dvh;align-items:flex-start}
+#signupFlow{overflow-y:auto;overscroll-behavior:contain}
+/* iOS zoome sur tout champ sous 16 px : la page saute et le champ semble ignorer l'appui. */
+@media (pointer:coarse){.input,.select,.textarea{font-size:16px}}
 .signup-skip{display:block;width:100%;margin:2px 0 0;padding:8px;background:none;border:none;
   color:var(--muted);font:inherit;font-size:12.5px;text-decoration:underline;cursor:pointer}
 .signup-skip:hover{color:var(--text)}
@@ -917,7 +918,7 @@ th.act-col,td.act-col{width:1%;white-space:nowrap;padding-right:14px}
 /* Jauge de robustesse du mot de passe.
    Quatre cellules qui se remplissent, un libellé en fondu enchaîné et les
    critères cochés au fil de la frappe : la jauge conseille, elle ne bloque
-   rien (le passage à l'étape suivante reste régi par validateSignupStep). */
+   rien : aucune étape de l'inscription n'est bloquante). */
 .pstrength{margin-top:12px;--ps-tone:var(--muted)}
 .pstrength[data-tone="danger"]{--ps-tone:var(--red)}
 .pstrength[data-tone="caution"]{--ps-tone:var(--amber)}
@@ -1301,7 +1302,8 @@ select.pill option{background:#121613;color:var(--text)}
   color:var(--text);font:inherit;font-weight:600;font-size:13.5px;cursor:pointer;
   transition:border-color .2s ease;
 }
-.ihb:hover{border-color:var(--line-soft)}
+button,.file-drop{touch-action:manipulation}
+@media (hover:hover){.ihb:hover{border-color:var(--line-soft)}}
 .ihb-label,.ihb-fly{grid-area:1/1;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;transition:transform .3s ease,opacity .3s ease}
 .ihb-label{transform:translateX(4px)}
 .ihb-label svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-linecap:round}
@@ -1314,14 +1316,21 @@ select.pill option{background:#121613;color:var(--text)}
 .ihb-mini .ihb-fly svg{width:13px;height:13px}
 .ihb-fly{gap:8px;justify-self:center;z-index:2;opacity:0;color:#04150c;transform:translateX(140%)}
 .ihb-fly svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.ihb:hover .ihb-label,.ihb:focus-visible .ihb-label{transform:translateX(140%);opacity:0}
-.ihb:hover .ihb-fly,.ihb:focus-visible .ihb-fly{transform:translateX(-4px);opacity:1}
+.ihb:focus-visible .ihb-label{transform:translateX(140%);opacity:0}
+.ihb:focus-visible .ihb-fly{transform:translateX(-4px);opacity:1}
+/* Le survol n'existe qu'à la souris : sur iOS, un :hover qui change l'affichage
+   consomme le premier appui, et il fallait toucher le bouton plusieurs fois. */
+@media (hover:hover){
+  .ihb:hover .ihb-label{transform:translateX(140%);opacity:0}
+  .ihb:hover .ihb-fly{transform:translateX(-4px);opacity:1}
+}
 .ihb-dot{
   position:absolute;left:20%;top:40%;width:8px;height:8px;z-index:1;
   border-radius:8px;background:var(--accent);transform:scale(1);
   transition:all .3s ease;
 }
-.ihb:hover .ihb-dot,.ihb:focus-visible .ihb-dot{left:0;top:0;width:100%;height:100%;transform:scale(1.8)}
+.ihb:focus-visible .ihb-dot{left:0;top:0;width:100%;height:100%;transform:scale(1.8)}
+@media (hover:hover){.ihb:hover .ihb-dot{left:0;top:0;width:100%;height:100%;transform:scale(1.8)}}
 
 /* Modale */
 .overlay{
@@ -4906,9 +4915,15 @@ async function submitSignup(){
   /* Le compte est ouvert maintenant, avec le mot de passe du candidat, et
      reste inactif jusqu'à l'acceptation. Sans lui, l'administrateur n'aurait
      aucun moyen d'ouvrir l'accès depuis le navigateur. */
-  const profileId = await store.signUpCandidat(
-    signupData.email || "", signupData.password || "",
-    [signupData.prenom, signupData.nom].filter(Boolean).join(" ").trim());
+  /* Rien ne doit empêcher le dépôt : si le compte ne peut pas s'ouvrir
+     (adresse invalide, mot de passe court, réseau), le dossier part quand
+     même sans compte, et l'administrateur l'ouvre à l'acceptation. */
+  let profileId = null;
+  try {
+    profileId = await store.signUpCandidat(
+      signupData.email || "", signupData.password || "",
+      [signupData.prenom, signupData.nom].filter(Boolean).join(" ").trim());
+  } catch { profileId = null; }
   return store.createApplication({
     profile_id: profileId,
     nom: signupData.nom || "",
@@ -4922,7 +4937,7 @@ async function submitSignup(){
     justificatif_path: piece?.path || null,
     justificatif_size: piece?.size || null,
     justificatif_type: piece?.type || null,
-    password_set: true,
+    password_set: !!profileId,
     password_score: force.score
   });
 }
@@ -4945,14 +4960,6 @@ function collectSignupStep(key){
   if (key === "contact"){ signupData.email = val("#su_email"); signupData.telephone = val("#su_tel"); signupData.adresse = val("#su_adresse"); }
   if (key === "statut"){ signupData.siret = val("#su_siret"); signupData.rsac = val("#su_rsac"); }
   if (key === "paiement"){ signupData.password = val("#su_pass"); }
-}
-
-function validateSignupStep(key){
-  if (key === "identite") return signupData.nom && signupData.prenom;
-  if (key === "contact")  return signupData.email && signupData.telephone && signupData.adresse;
-  if (key === "statut")   return signupData.siret && signupData.rsac && signupData.justificatifName;
-  if (key === "paiement") return signupData.password && signupData.password.length >= 8;
-  return true;
 }
 
 function renderSignupStep(){
@@ -5002,7 +5009,7 @@ function wireSignupFlow(){
     if (signupStep >= SIGNUP_STEPS.length){ closeSignupFlow(); return; }   // « Retour à l'accueil »
     const key = SIGNUP_STEPS[signupStep].key;
     collectSignupStep(key);
-    if (!validateSignupStep(key)){ toast("Merci de compléter tous les champs de cette étape.", "err"); return; }
+    /* Aucune étape ne bloque : c'est à l'administrateur de juger le dossier. */
     // Dernière étape : le dossier part avant d'afficher l'écran de fin,
     // pour ne jamais annoncer un dépôt qui n'a pas eu lieu.
     if (signupStep === SIGNUP_STEPS.length - 1){
